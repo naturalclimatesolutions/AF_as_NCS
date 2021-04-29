@@ -1,1 +1,1 @@
-((absor* OR fix* OR seq*) NEAR/2 carbon) OR ((fight* OR tackl* OR solv* OR mitigat*) NEAR/2 "climat* chang*")
+((absor* OR fix* OR seq*) NEAR/2 carbon) OR ((fight* OR tackl* OR solv* OR mitigat*) NEAR/2 "climat* chang*") OR ("nature based solution*" NEAR\2 "climat*")
