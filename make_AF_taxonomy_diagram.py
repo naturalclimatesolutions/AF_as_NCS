@@ -1,4 +1,5 @@
 import plotly.graph_objects as go
+from pySankey.sankey import sankey
 
 # TODO:
     # What other taxonomies to incorporate?
