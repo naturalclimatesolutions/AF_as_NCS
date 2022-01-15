@@ -34,4 +34,6 @@ if __name__ == '__main__':
     # peg them together
     search_terms = 'TS=(\n\n%s\nAND\n\n%s\n)' % (agrofor_terms, topic_terms)
 
-    os.system("echo '%s' | xclip -sel clip" % search_terms)
+    # save to file
+    with open('search_terms_%s_%s.txt' % ('agrofor', topic), 'w') as f:
+        f.write(search_terms)

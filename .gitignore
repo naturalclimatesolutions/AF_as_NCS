@@ -2,3 +2,5 @@
 *.png
 *.pdf
 *.jpg
+citation_trends/AF*.txt
+citation_trends/NCS*.txt
