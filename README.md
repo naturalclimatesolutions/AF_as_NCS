@@ -2,6 +2,7 @@
 
 **Contains**:
 
+- publication trends analysis
  - static files containing WoS search terms for:
    - agroforestry systems
    - natural climate solutions (and related language)
@@ -11,3 +12,9 @@
    - literature providing carbon sequestration estimates in agroforestry
  - an Excel file of agroforestry search terms that Sam pulled from \_\_\_WHERE?\_\_\_
  - a Python script that chopped some info out of that Excel file and processed it a bit
+- analysis of overlap in original studies analyzed in 9 meta-analyses
+- analysis of uncertainty in C estimates
+  - for Cardinael et al. 2018
+- taxonomy assessment (Sankey diagrams)
+  - ABORTED
+- mapping analyses

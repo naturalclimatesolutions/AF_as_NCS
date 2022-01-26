@@ -38,3 +38,7 @@ for i in range(2, len(metas)+1):
     print('---------------------\n')
     print('%0.1f%% of studies contained in at least %i meta-analyses\n\n' % (
                                                     100*np.mean(counts>=i), i))
+
+
+# print total study count
+print('TOTAL NUMBER OF STUDIES: ', np.sum(np.sum(subdf.values, axis=1)>=1))

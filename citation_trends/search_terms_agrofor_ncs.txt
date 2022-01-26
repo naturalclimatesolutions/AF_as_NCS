@@ -1,9 +1,0 @@
-TS=(
-
-(agroforest* OR agro-forest* OR agrisilvicultur* OR agrosilvicultur* OR silvorable OR "forest farm*" OR "farm forest*" OR "forest grazing" OR "riparian buffer*" OR riparian-buffer* OR "improved fallow*" OR "rotational tree fallow" OR "multipurpose tree*" OR silvopastur* OR agrosilvipastur* OR agrosilvopast* OR "agrosilvopast* system*" OR hedgerow* OR hedge-row* OR shelterbelt* OR shelter-belt* OR (tree* AND (farmland* OR plot*)) OR (hedgerow AND intercrop*) OR (hedge-row AND intercrop*) OR ("hedge row*" AND intercrop*) OR (wood* AND "hedge row*") OR "wood* hedge-row*" OR windbreak* OR wind-break* OR "live hedge*" OR alley-crop* OR "alley crop*" OR "meadow orchard*" OR orchard* OR "home garden*" OR homegarden* OR ("home garden*" NEAR/3 animal*) OR (homegarden* NEAR/3 animal*) OR ("multi-stor* farm*" NEAR/5 ("tree* crop*")) OR ("multistor* farm*" NEAR/5 ("tree* crop*")) OR entomo-forest* OR entomoforest* OR aquasilvofisher* OR aqua-silvo-fisher* OR aqua-silvofisher* OR taungya OR "taungya farming" OR "shifting cultivat*" OR "taungya cultivation" OR (woody* AND "agricultur* crop*") OR "multilayer tree garden*" OR "plantation crop combination*" OR "shade tree*" OR intercrop* OR (integrated NEAR/2 ("farm* system*")) OR (tree* AND pasture*) OR (tree* AND rangeland*) OR (fodder* AND (farm* OR rangeland*)) OR (apiculture AND tree*) OR aquaforest* OR aqua-forest* OR interplant* OR (interplant* NEAR/5 firewood*) OR ("soil conservation" AND tree*) OR (tree* AND (bund* OR terrace* OR raise*)))
-
-AND
-
-(((absor* OR fix* OR seq*) NEAR/2 carbon) OR ((fight* OR tackl* OR solv* OR mitigat*) NEAR/2 "climat* chang*") OR ("nature based solution*" NEAR\2 "climat*") OR "natural climate solutions")
-
-)

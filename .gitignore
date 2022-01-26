@@ -4,3 +4,11 @@
 *.jpg
 citation_trends/AF*.txt
 citation_trends/NCS*.txt
+mapping/rosenstock_et_al_2019_data/*.xlsx
+mapping/rosenstock_et_al_2019_data/rosenstock_et_al*
+mapping/rosenstock_et_al_2019_data/NewWorld*
+mapping/AF_locations_from_papers/
+mapping/zomer_data/Biomass_Carbon_Ag_Land_2010/
+mapping/zomer_data/Tree_Cover_Ag_Land_2010/
+publication_trends/*txt
+publication_trends/*png
