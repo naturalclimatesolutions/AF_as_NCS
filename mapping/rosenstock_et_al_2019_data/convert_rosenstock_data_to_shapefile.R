@@ -78,6 +78,9 @@ shp['country_ISO3'] = shp.country.ISO3
 # merge Rosenstock data onto spatial data
 outdf = merge(shp, subdf, on='country_ISO3', all.x=T)
 
+# reproject ot WGS84
+outdf = st_transform(outdf, 4326)
+
 # write out
 st_write(outdf, './rosenstock_et_al_2019_AF_NDCs_db.shp', append=F)
 
