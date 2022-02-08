@@ -8,6 +8,8 @@ mapping/rosenstock_et_al_2019_data/*.xlsx
 mapping/rosenstock_et_al_2019_data/rosenstock_et_al*
 mapping/rosenstock_et_al_2019_data/NewWorld*
 mapping/AF_locations_from_papers/scratch/
+mapping/chapman_data_aggregated/*
+mapping/country_bounds/*
 mapping/AF_locations_from_papers/*.cpg
 mapping/AF_locations_from_papers/*.dbf
 mapping/AF_locations_from_papers/*.prj

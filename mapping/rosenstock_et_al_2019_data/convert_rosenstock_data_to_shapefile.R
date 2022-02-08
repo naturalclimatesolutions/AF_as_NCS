@@ -39,13 +39,15 @@ cols.renamed = c('region',
 subdf = df[cols.2.keep]
 colnames(subdf) = cols.renamed
 
-# combine the NC and NDC explicit and implicit mentions into a single T/F col
+# combine NC and NDC explicit and implicit mentions into a single T/F col
 subdf$NCmnt = (((subdf$NCexp) & (!is.na(subdf$NCexp))) *1) | (((subdf$NCimp) & (!is.na(subdf$NCimp))) *1)
 subdf$NDCmnt = (((subdf$NDCexp) & (!is.na(subdf$NDCexp))) *1) | (((subdf$NDCimp) & (!is.na(subdf$NDCimp))) *1)
+subdf$NAMAmnt = (((subdf$NAMAexp) & (!is.na(subdf$NAMAexp))) *1) | (((subdf$NAMAimp) & (!is.na(subdf$NAMAimp))) *1)
 # correct so that rows that are NA for both implicit and explicit mentions
 # are NA, rather than T or F
 subdf[is.na(subdf$NCexp) & is.na(subdf$NCimp), ]$NCmnt = NA
 subdf[is.na(subdf$NDCexp) & is.na(subdf$NDCimp), ]$NDCmnt = NA
+subdf[is.na(subdf$NAMAexp) & is.na(subdf$NAMAimp), ]$NAMAmnt = NA
 
 
 
@@ -83,4 +85,3 @@ outdf = st_transform(outdf, 4326)
 
 # write out
 st_write(outdf, './rosenstock_et_al_2019_AF_NDCs_db.shp', append=F)
-

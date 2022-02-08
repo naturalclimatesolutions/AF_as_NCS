@@ -19,10 +19,13 @@ df = fulldf.loc[:, ['site.id', 'study.id', 'site.sitename', 'site.state',
                     'site.country', 'lat', 'lon', 'other.reference',
                     'sites.notes']]
 
+# rename columns (GEE doesn't like periods in them)
+df.columns = [col.replace('.', '_') for col in df.columns]
+
 # drop rows with bad lats or lons
 df = df[((pd.notnull(df.lon).values)*
                (pd.notnull(df.lat))*
-               (pd.notnull(df['site.id'])))]
+               (pd.notnull(df['site_id'])))]
 keep_rows = []
 new_lons = []
 new_lats = []
