@@ -2,6 +2,8 @@
 *.png
 *.pdf
 *.jpg
+*.csv
+*.xlsx
 citation_trends/AF*.txt
 citation_trends/NCS*.txt
 mapping/rosenstock_et_al_2019_data/*.xlsx
@@ -9,6 +11,7 @@ mapping/rosenstock_et_al_2019_data/rosenstock_et_al*
 mapping/rosenstock_et_al_2019_data/NewWorld*
 mapping/AF_locations_from_papers/scratch/
 mapping/chapman_data_aggregated/*
+mapping/chapman_potential_data/*
 mapping/country_bounds/*
 mapping/AF_locations_from_papers/*.cpg
 mapping/AF_locations_from_papers/*.dbf
