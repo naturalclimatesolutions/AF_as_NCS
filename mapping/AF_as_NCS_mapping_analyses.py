@@ -3,6 +3,7 @@ import pandas as pd
 import geopandas as gpd
 import matplotlib as mpl
 import matplotlib.pyplot as plt
+from matplotlib.lines import Line2D
 from matplotlib.colors import LinearSegmentedColormap
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 import seaborn as sns
@@ -314,7 +315,8 @@ for i, col in enumerate(['density_crop', 'density_pasture']):
                         data=data_for_figs,
                         #inner='box',
                         #orient='h',
-                        palette=['#d1caa7', '#b4edb5'],
+                        #palette=['#d1caa7', '#b4edb5'],
+                        palette=['#ffd9e6', '#c9e4ff'],
                        )
     cont_lookup = dict(zip(data_for_figs.cont.unique(),
                            range(len(data_for_figs.cont.unique()))))
@@ -344,15 +346,9 @@ for i, col in enumerate(['density_crop', 'density_pasture']):
             ax.text(x-0.005, y, cont, fontdict={'fontsize': 7,
                                            'weight': 'bold',
                                            'rotation': 'vertical'}, alpha=0.9)
-            if len(data_for_figs.loc[(data_for_figs.cont == cont) &
-                                 (data_for_figs.NDC_num == NDC_status)]) > 0:
-                ax.plot([x, x],
-                        [0, np.max(data_for_figs.loc[(data_for_figs.cont == cont) &
-                                             (data_for_figs.NDC_num == NDC_status),
-                                             col])],
-                        color='black', linewidth=0.2, alpha=1)
-            else:
-                ax.plot([x,x], [0, 0.01], color='black', linewidth=0.2, alpha=1)
+            ax.plot([x, x],
+                    [0, 25],
+                    color='black', linewidth=0.2, alpha=1)
 
 
     # t-test of significant diff between NDC and non-NDC groups
@@ -361,10 +357,10 @@ for i, col in enumerate(['density_crop', 'density_pasture']):
                    nan_policy='omit')
     print(('\n\nt-test of sig. diff. between woody C ag-land density in NDC and '
            'non-NDC countries:\n\tt-stat: %0.3f\n\tp-value: '
-           '%0.3f') % (res.statistic, res.pvalue))
+           '%0.5f') % (res.statistic, res.pvalue))
 
     ax.text(-0.45, 0.95*data_for_figs[col].max(),
-            't-stat: %0.3f\np-value: %0.3f' % (res.statistic, res.pvalue),
+            't-stat: %0.3f\np-value: %0.5f' % (res.statistic, res.pvalue),
             fontdict={'fontsize': 10, 'fontstyle': 'italic'})
     ax.set_ylim([-2.5, 1.05*data_for_figs[col].max()])
 
@@ -490,6 +486,9 @@ for i, col in enumerate(['density_crop', 'density_pasture']):
 #  the current number are just the really high-density ones in Africa
 #  and small Caribbean Islands (as well as Kosovo, Turkmenistan, and Suriname)
 #  so that makes sense because all the data were used together to set 'potential'
+data_for_figs['abs_deficit'] = np.clip(((data_for_figs['total_potential'] -
+                                     data_for_figs['total_biomass'])),
+                                       a_min = 0, a_max = None)
 data_for_figs['deficit'] = np.clip(((data_for_figs['total_potential'] -
                                      data_for_figs['total_biomass'])/(
                 data_for_figs['total_potential']))*100, a_min = 0, a_max = None)
@@ -574,5 +573,101 @@ fig3.show()
 if save_it:
     fig3.savefig('woody_C_deficit.png',
                   dpi=dpi, orientation='landscape')
+
+
+
+
+# POTENTIAL OVER-/UNDER-REPRESENTATION IN LIT
+
+# calculate area-weighted average density
+data_for_figs['avg_density'] = (((data_for_figs['density_crop'] *
+                                 data_for_figs['area_crop']) +
+                                (data_for_figs['density_pasture'] *
+                                 data_for_figs['area_pasture'])) /
+                                (data_for_figs['total_area']))
+
+# get count of points in each country poly
+dfsjoin = gpd.sjoin(data_for_figs, af_locs)
+dfsjoin['count'] = 1
+counts = dfsjoin.groupby(['NAME_EN']).sum()['count']
+
+# add a point-density col in data_for_figs
+data_for_figs['count'] = 0
+for cntry in counts.index:
+    data_for_figs.loc[data_for_figs['NAME_EN'] == cntry, 'count'] = counts[cntry]
+data_for_figs['pt_density'] = data_for_figs['count']/data_for_figs['total_area']
+
+fig4, ax = plt.subplots(1, 1)
+for i, row in data_for_figs.iterrows():
+    ax.text(row['avg_density'], row['pt_density'], row['NAME_EN'])
+ax.set_ylim([data_for_figs['pt_density'].min(),
+             data_for_figs['pt_density'].max()])
+
+# determine breakpoints between low, mod, and high avg_density
+lo, md, hi = np.nanpercentile(data_for_figs['avg_density'], [10, 50, 90])
+
+# assign colors based on lo, md, hi and yes/no studies present
+
+
+# TOTAL POTENTIAL VS DEFICIT
+colors = {'AF not in NDC':mpl.colors.hex2color('#910a3e'),
+          'AF in NDC': mpl.colors.hex2color('#18548f')
+         }
+# rank the pt counts
+data_for_figs['count_rank'] = data_for_figs['count'].rank(method='dense')
+fig5, ax = plt.subplots(1,1)
+sns.scatterplot(x=data_for_figs['deficit'],
+                # TODO: DECIDE IF I'M CORRECT THAT I NEED TO /2 HERE TO GET Mg C
+                y=data_for_figs['total_potential']/2,
+                style=['o' if c>0 else 'x' for c in data_for_figs['count']],
+                hue=data_for_figs['NDC_num'],
+                palette=['#910a3e', '#18548f'],
+                size=data_for_figs['count_rank'],
+                sizes=(50, 300),
+                alpha=0.4,
+                ax=ax)
+
+legend_elements = [Line2D([0], [0],
+                          marker='o',
+                          color=c,
+                          label=l,
+                          linewidth=0,
+                          markersize=6,
+                          alpha=0.4) for l, c in colors.items()]
+legend_elements = legend_elements + [Line2D([0], [0], color='black', label='')]
+legend_elements = legend_elements + [Line2D([0], [0],
+                                            marker=m,
+                                            color='black',
+                                            alpha=0.5,
+                                            label=l,
+                                            linewidth=0,
+                                            markersize=6,
+                                           ) for l, m in [('no known studies', 'x'),
+                                                    ('known studies', 'o')]]
+legend_elements = legend_elements + [Line2D([0], [0], color='black', label='')]
+legend_elements = legend_elements + [Line2D([0], [0],
+                                            marker='o',
+                                            color='black',
+                                            alpha=0.5,
+                                            label=l,
+                                            linewidth=0,
+                                            markersize=s
+                                           ) for l, s in [('few studies', 6),
+                                                        ('many studies', 15)]]
+ax.legend(handles=legend_elements, loc='upper left')
+qtile = np.nanpercentile(data_for_figs['total_potential'], 90)
+for i, row in data_for_figs.iterrows():
+    if row['total_potential']>qtile:
+        ax.text(row['deficit'],
+                (row['total_potential']/2) + 0.005e8,
+                row['NAME_EN'],
+               )
+ax.set_xlabel('woody C deficit (% below total potential)',
+              fontdict={'fontsize': 20})
+ax.set_ylabel('total potential woody C (Mg)',
+              fontdict={'fontsize': 20})
+fig5.show()
+
+
 
 
