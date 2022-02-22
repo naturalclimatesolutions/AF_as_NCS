@@ -12,6 +12,7 @@ from scipy.stats import ttest_ind
 from copy import deepcopy
 import warnings
 
+
 # plot params
 save_it = False
 suptitle_fontsize = 50
@@ -89,9 +90,10 @@ chapman_C_agg = gpd.read_file(('./chapman_data_aggregated/'
                                'chapman_crop_and_pasture_country_agg.shp'))
 chapman_ag_area_agg = gpd.read_file(('./chapman_data_aggregated/'
                                        './chapman_ag_land_area_country_agg.shp'))
+ndc_contrib_raw = pd.read_csv(('./NDC_contribs/pathway_mitigation_potential_and_NDC'
+                               '_targets_with_ISO3.csv'))
 af_locs = gpd.read_file(('AF_locations_from_papers/'
                          'AF_locations_from_meta-analyses.shp'))
-
 
 # load the IUCN AF NDC-mentions data from 2018 report
 # (gleaned in a cleaned form from Millie Chapman's work:
@@ -187,7 +189,7 @@ continents.index = ['Af.', 'Antarctica', 'Asia', 'C. Am./Car.',
 # (NOTE: I found no good metadata doc for her SI data,
 #        but I compared to my own datasets and confirmed that units are Mg
 #        (biomass and C) and ha)
-chapman_potential = pd.read_csv(('./chapman_potential_data/'
+chapman_potential = pd.read_csv(('./chapman_supplemental_data/'
                                   'summary_potential_standing.csv'))
 chapman_potential = pd.merge(countries, chapman_potential,
                                  left_on='iso_a3', right_on='ISO_A3',
@@ -274,6 +276,41 @@ chapman_C_agg['ha_ag_land'] = chapman_ag_area_agg['ha']
 chapman_C_agg['Mg_C_per_ha'] = chapman_C_agg['sum']/chapman_C_agg['ha_ag_land']
 
 
+# prep NDC contributions analysis
+# subset and rename cols
+ndc_contrib = ndc_contrib_raw.loc[:, ['iso3',
+                    'CountryGeography',
+                    'Trees in Agriculture Lands [Chapman]',
+                    'Cost-effective Trees in Agriculture Lands [Chapman]',
+                    'Reforestation (GROA)',
+                    'Cost-effective Reforestation (GROA)',
+                    '(Sharon et al) Emissions Reduction Target',
+                    '(Sharon et al) NDC Reduction Percent',
+                    '(Sharon et al) Reference Year Emissions Rate',
+                    '(Sharon et al) New Annual Emisions after target reached',
+                    'NDC Summary',
+                   ]]
+ndc_contrib.columns = ['iso3',
+              'geo',
+              'tia',
+              'tia_ce',
+              'refor',
+              'refor_ce',
+              'targ',
+              'red_pct',
+              'ref_yr',
+              'new_emis',
+              'ndc_summ'
+              ]
+
+# calculate proportion of NDC goals that could be met by AF
+ndc_contrib['pct_tia'] = ndc_contrib['tia']/ndc_contrib['targ'] * 100
+ndc_contrib['pct_tia_ce'] = ndc_contrib['tia_ce']/ndc_contrib['targ'] * 100
+ndc_contrib['pct_refor'] = ndc_contrib['refor']/ndc_contrib['targ'] * 100
+ndc_contrib['pct_refor_ce'] = ndc_contrib['refor_ce']/ndc_contrib['targ'] * 100
+
+
+
 ##### ANALYSIS OF DENSITY IN NDC AND NON-NDC COUNTRIES
 # prep data
 data_for_figs = chapman_potential.loc[:, ['area_crop',
@@ -285,6 +322,7 @@ data_for_figs = chapman_potential.loc[:, ['area_crop',
                                       'potential_pasture',
                                       'total_potential',
                                       'total_biomass',
+                                      'ISO_A3',
                                       'NDC',
                                       'NAME_EN',
                                       'cont',
@@ -670,4 +708,99 @@ fig5.show()
 
 
 
+############################
+# NDC contributions analysis
+
+# prep NDC contributions data
+df_hist_tia = ndc_contrib.loc[:, ['geo', 'pct_tia', 'pct_tia_ce']]
+df_hist_tia.columns = ['country', 'max_potential', 'cost_effective']
+df_hist_tia = pd.melt(df_hist_tia, id_vars=['country'],
+                      value_vars=['max_potential', 'cost_effective'])
+df_hist_tia['NCS'] = 'agroforestry'
+df_hist_refor = ndc_contrib.loc[:, ['geo', 'pct_refor', 'pct_refor_ce']]
+df_hist_refor.columns = ['country', 'max_potential', 'cost_effective']
+df_hist_refor = pd.melt(df_hist_refor, id_vars=['country'],
+                        value_vars=['max_potential', 'cost_effective'])
+df_hist_refor['NCS'] = 'reforestation'
+df_hist = pd.concat((df_hist_tia, df_hist_refor), axis=0)
+df_hist.columns = ['country', 'estimate_type', 'percent_NDC_target', 'NCS']
+
+# make histograms
+fig_hists, axs = plt.subplots(2,1)
+sns.histplot(x="percent_NDC_target",
+                          hue='NCS',
+                          alpha=0.5,
+                          binwidth=2.5,
+                          binrange=(0,110),
+                          legend=True,
+                          ax=axs[0],
+                          data=df_hist[df_hist['estimate_type']=='max_potential'],
+                         )
+sns.histplot(x="percent_NDC_target",
+                          hue='NCS',
+                          alpha=0.5,
+                          binwidth=2.5,
+                          binrange=(0,110),
+                          legend=True,
+                          ax=axs[1],
+                          data=df_hist[df_hist['estimate_type']=='cost_effective'],
+                         )
+for i, ax in enumerate(axs):
+    ax.set_ylabel('count')
+    if i == 0:
+        ax.set_title('Max potential')
+    if i == 1:
+        ax.set_title('Cost-effective')
+        ax.set_xlabel('achievable percent of NDC target')
+fig_hists.show()
+
+# merge onto countries
+ndc_contrib_map = pd.merge(countries, ndc_contrib,
+                           left_on='iso_a3', right_on='iso3', how='outer')
+ndc_contrib_map = pd.merge(ndc_contrib_map, data_for_figs.loc[:, ['ISO_A3', 'NDC_num']],
+         left_on='iso_a3', right_on='ISO_A3', how='outer')
+
+fig_map, axs = plt.subplots(2, 1)
+fig_map.suptitle('percent of NDC targets achievable by agroforestry (Baruch-Mordo et al. 2018)')
+for ax, col in zip(axs, ['pct_tia', 'pct_tia_ce']):
+    divider = make_axes_locatable(ax)
+    rcax = divider.append_axes("right", size="5%", pad=0.1)
+    lcax = divider.append_axes("left", size="5%", pad=0.1)
+    cax_dict = {0: lcax, 1:rcax}
+
+    countries.plot(facecolor='none',
+               edgecolor='black',
+               linewidth=0.25,
+               ax=ax)
+    ax.set_xticks(())
+    ax.set_xticklabels(())
+    ax.set_yticks(())
+    ax.set_yticklabels(())
+    for NDC_status in range(2):
+        subdf = ndc_contrib_map[ndc_contrib_map.NDC_num == NDC_status]
+        map = subdf.plot(col,
+                         ax=ax,
+                         vmin=0,
+                         vmax=100,
+                         cmap=cmaps[NDC_status],
+                         edgecolor=edgecolor,
+                         linewidth=linewidth,
+                         legend=True,
+                         legend_kwds={'label': 'percent NDC target achievable',
+                                      'orientation': "vertical"},
+                         cax=cax_dict[NDC_status])
+
+    rcax.set_title(cbar_title_lookup[1])
+    lcax.set_title(cbar_title_lookup[0])
+    lcax.yaxis.set_ticks_position('left')
+    lcax.yaxis.set_label_position('left')
+
+axs[0].set_title('max potential mitigation')
+axs[1].set_title('cost-effective mitigation')
+
+fig_map.show()
+
+if save_it:
+    fig_map.savefig('NDC_contributions_map.png',
+                    dpi=dpi, orientation='portrait')
 

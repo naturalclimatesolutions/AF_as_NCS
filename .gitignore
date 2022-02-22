@@ -25,5 +25,11 @@ mapping/AF_locations_from_papers/*.csv
 mapping/AF_locations_from_papers/__pycache__
 mapping/zomer_data/Biomass_Carbon_Ag_Land_2010/
 mapping/zomer_data/Tree_Cover_Ag_Land_2010/
+C_analysis/*cpg
+C_analysis/*dbf
+C_analysis/*shp
+C_analysis/*shx
+C_analysis/*fix
+C_analysis/*prj
 publication_trends/*txt
 publication_trends/*png
