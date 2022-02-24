@@ -207,19 +207,39 @@ agb_pts = gpd.GeoDataFrame(agb_pts, geometry=gpd.points_from_xy(agb_pts.lon,
 
 # read in the points after Chapman data has been merged onto them,
 # for AGB estimate comparison
-agb_comp = gpd.read_file('./agb_pts_from_cardinael_2018_chapman_extract.shp')
-assert len(agb_comp) == len(agb_pts)
-agb_comp = pd.merge(agb_pts, agb_comp.loc[:,['ID', 'mean']],
+agb_comp_chap = gpd.read_file('./agb_pts_from_cardinael_2018_chapman_extract.shp')
+agb_comp_chap = agb_comp_chap.rename({'mean': 'chap_stock'}, axis=1)
+assert len(agb_comp_chap) == len(agb_pts)
+
+agb_comp_whrc = gpd.read_file('./agb_pts_from_cardinael_2018_whrc_extract.shp')
+agb_comp_whrc = agb_comp_whrc.rename({'mean': 'whrc_stock'}, axis=1)
+assert len(agb_comp_whrc) == len(agb_pts)
+agb_comp_whrc_sub = agb_comp_whrc.loc[:, ['ID', 'whrc_stock']]
+
+agb_comp_sant = gpd.read_file('./agb_pts_from_cardinael_2018_santoro_extract.shp')
+agb_comp_sant = agb_comp_sant.rename({'mean': 'sant_stock'}, axis=1)
+assert len(agb_comp_sant) == len(agb_pts)
+agb_comp_sant_sub = agb_comp_sant.loc[:, ['ID', 'sant_stock']]
+
+agb_comp = pd.merge(agb_comp_chap, agb_comp_sant_sub, on='ID', how='left')
+agb_comp = pd.merge(agb_comp, agb_comp_whrc_sub, on='ID', how='left')
+
+assert len(agb_comp) == len(agb_comp_chap) == len(agb_comp_whrc_sub) == len(agb_comp_sant_sub)
+agb_comp = pd.merge(agb_pts, agb_comp.loc[:,['ID', 'chap_stock', 'whrc_stock', 'sant_stock']],
                     on='ID', how='inner')
 assert len(agb_comp) == len(agb_pts)
+
 #rename cols
-agb_comp.columns = [c if c!= 'mean' else 'chap_stock' for c in agb_comp.columns]
 agb_comp.columns = [c if c!= 'stock' else 'card_stock' for c in agb_comp.columns]
 # keep only rows where Chapman extraction was successful
 # NOTE: only about 1/4 of rows!
-agb_comp = agb_comp[pd.notnull(agb_comp.chap_stock)]
+agb_comp = agb_comp[(pd.notnull(agb_comp.chap_stock)) |
+                    (pd.notnull(agb_comp.sant_stock)) |
+                    (pd.notnull(agb_comp.whrc_stock)) ]
 # get a stock-diff col
-agb_comp['stock_diff'] = agb_comp['card_stock'] - agb_comp['chap_stock']
+agb_comp['stock_diff_chap'] = agb_comp['card_stock'] - agb_comp['chap_stock']
+agb_comp['stock_diff_whrc'] = agb_comp['card_stock'] - agb_comp['whrc_stock']
+agb_comp['stock_diff_sant'] = agb_comp['card_stock'] - agb_comp['sant_stock']
 
 
 #############################
@@ -408,46 +428,65 @@ for col_fn, ax in zip(cat_cols.items(), axs):
 
 fig1.show()
 
-# plot diffs between Cardinael and Chapman
-fig2, axs2 = plt.subplots(2,1)
-axs2[0].plot([0,70], [0,70], ':k')
-sns.scatterplot(x='card_stock',
-                y='chap_stock',
-                hue='practice',
-                data=agb_comp,
-                ax=axs2[0])
-axs2[0].set_xlim([0, 1.05*agb_comp.card_stock.max()])
-axs2[0].set_ylim([0, 1.05*agb_comp.chap_stock.max()])
-axs2[0].set_xlabel(('published woody C density estimate\n($Mg\ C\ ha^{-1}$);'
-                   ' Cardinael et al. 2018'))
-axs2[0].set_ylabel(('remotely sensed woody C density estimate\n($Mg\ C\ ha^{-1}$);'
-                   ' Chapman et al. 2020'))
-divider = make_axes_locatable(axs2[1])
-cax = divider.append_axes("bottom", size="5%", pad=0.25)
-axs2[1].set_xticks(())
-axs2[1].set_xticklabels(())
-axs2[1].set_yticks(())
-axs2[1].set_yticklabels(())
-countries = gpd.read_file('../mapping/country_bounds/NewWorldFile_2020.shp')
-countries = countries.to_crs(4326)
-countries.plot(facecolor='none',
-               edgecolor='black',
-               linewidth=0.25,
-               ax=axs2[1])
-scat=axs2[1].scatter(x=agb_comp.lon,
-                     y=agb_comp.lat,
-                     c=agb_comp.stock_diff,
-                     cmap='RdBu',
-                     s=100,
-                     edgecolors='black',
-                     linewidth=0.75,
-                     alpha=0.7,
-                     vmin=-225,
-                     vmax=225,
-                    )
-plt.colorbar(scat, orientation="horizontal", cax=cax,
-             label=('published estimate (Cardinael et al.'
-                    ' 2018) - remote sensing estimate'
-                    ' (Chapman et al. 2020) ($Mg\ C\ ha^{-1}$)'))
-cax.set_title('discrepancy')
+# plot diffs between Cardinael and Chapman, Cardinael and Santoro
+fig2, axs2 = plt.subplots(3,2)
+axs2 = axs2.flatten()
+for i, col in enumerate(['chap_stock', 'whrc_stock', 'sant_stock']):
+    stock_diff_col = {'chap_stock': 'stock_diff_chap',
+                      'whrc_stock': 'stock_diff_whrc',
+                      'sant_stock': 'stock_diff_sant'}[col]
+    dataset_label = {'chap_stock': 'Chapman et al. 2020',
+                     'whrc_stock': 'WHRC et al. unpub. 2022',
+                     'sant_stock': 'Santoro et al. 2021'}[col]
+    axs2[0+(2*i)].plot([0,70], [0,70], ':k')
+    sns.scatterplot(x='card_stock',
+                    y=col,
+                    hue='practice',
+                    data=agb_comp,
+                    ax=axs2[0+(2*i)])
+    axs2[0+(2*i)].set_xlim([0, 1.05*agb_comp[col].max()])
+    axs2[0+(2*i)].set_xlabel(('published woody C density estimate\n($Mg\ C\ ha^{-1}$);'
+                       ' Cardinael et al. 2018'))
+    axs2[0+(2*i)].set_ylabel(('remotely sensed woody C density estimate\n($Mg\ C\ ha^{-1}$);'
+                       ' %s') % dataset_label)
+    divider = make_axes_locatable(axs2[1+(2*i)])
+    cax = divider.append_axes("bottom", size="5%", pad=0.25)
+    axs2[1+(2*i)].set_xticks(())
+    axs2[1+(2*i)].set_xticklabels(())
+    axs2[1+(2*i)].set_yticks(())
+    axs2[1+(2*i)].set_yticklabels(())
+    countries = gpd.read_file('../mapping/country_bounds/NewWorldFile_2020.shp')
+    countries = countries.to_crs(4326)
+    countries.plot(facecolor='none',
+                   edgecolor='black',
+                   linewidth=0.25,
+                   ax=axs2[1+(2*i)])
+    scat=axs2[1+(2*i)].scatter(x=agb_comp.lon,
+                         y=agb_comp.lat,
+                         c=agb_comp[stock_diff_col],
+                         cmap='RdBu',
+                         s=100,
+                         edgecolors='black',
+                         linewidth=0.75,
+                         alpha=0.7,
+                         vmin=-225,
+                         vmax=225,
+                        )
+    plt.colorbar(scat, orientation="horizontal", cax=cax,
+                 label=('published estimate (Cardinael et al.'
+                        ' 2018) - remote sensing estimate'
+                        ' (%s) ($Mg\ C\ ha^{-1}$)') % dataset_label)
+    cax.set_title('discrepancy')
 fig2.show()
+
+# show discrepancy by dataset and system type
+df_discrep_by_dataset_prac = agb_comp.melt(id_vars=['practice'],
+                                           value_vars=['stock_diff_chap',
+                                                       'stock_diff_whrc',
+                                                       'stock_diff_sant'])
+fig3, ax = plt.subplots(1,1)
+sns.violinplot(x='practice', y='value', hue='variable',
+              data=df_discrep_by_dataset_prac)
+ax.plot(ax.get_xlim(), [0,0], '--k', linewidth=2, alpha=0.25)
+fig3.show()
+
