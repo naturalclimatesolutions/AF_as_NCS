@@ -34,6 +34,9 @@ m = pd.read_excel('./Agroforestry Data Oct 2021_MERGED_METANALYSES.xlsx',
 ############################
 # pre-process Cardinael data
 
+
+###############
+# prep agb data
 agb = agb.loc[:, ['Description',
                   'Technologies/Practices',
                   'Value',
@@ -104,7 +107,18 @@ bgb = agb.loc[:, (agb.columns != 'stock') & (agb.columns != 'rate')]
 agb = agb.loc[:, (agb.columns != 'bgb_stock') & (agb.columns != 'bgb_rate')]
 bgb.rename(columns={'bgb_stock': 'stock', 'bgb_rate': 'rate'}, inplace=True)
 
+
+###############
 # prep soc data 
+
+# only use stands that represent AF as NCS (i.e., not converted
+# from forest, etc), in order to avoid confounding of 'legacy C'
+soc = soc[soc.Previous_land_use == 'Agriculture']
+
+# subtract AF SOC from control AF to get additional C
+soc['add_stock'] = soc['AFS_Stock_t_ha'] - soc['Control_Stock_t_ha']
+
+# rename cols
 soc = soc.loc[:, ['USED_BY_REMI',
                   'Reference',
                   'Longitude',
@@ -118,7 +132,7 @@ soc = soc.loc[:, ['USED_BY_REMI',
                   'Total_tree_density',
                   'Age (yrs)',
                   'Depth (cm)',
-                  'AFS_Stock_t_ha',
+                  'add_stock',
                   'SOC_Storage_rate_t_ha_yr',
                  ]]
 soc.columns = ['valid',
@@ -137,7 +151,8 @@ soc.columns = ['valid',
                'stock',
                'rate',
               ]
-# add col in agb and bgb data missing from here
+
+# add col that's in agb and bgb data missing from here
 soc['age_bm'] = np.nan
 
 # line up columns in same order
@@ -154,15 +169,15 @@ all = pd.concat((agb, bgb, soc))
 
 # remap practice names
 practice_key = {'Parkland': 'park',
-                'Silvoarable': 'silvoar',
-                'Intercropping': 'intercrop',
+                'Silvoarable': 'intercrop_alley_silvoar',
+                'Intercropping': 'intercrop_alley_silvor',
                 'Fallow': 'fallow',
                 'Silvopasture': 'silvopas',
-                'Multistrata': 'multistrat',
-                'Shaded_perennial': 'shade',
-                'Shaded_perennial ': 'shade',
+                'Multistrata': 'multistrata',
+                'Shaded_perennial': 'multistrata',
+                'Shaded_perennial ': 'multistrata',
                 'Hedgerow': 'hedge',
-                'Alley_cropping': 'alley',
+                'Alley_cropping': 'intercrop_alley_silvor',
                }
 practice = [practice_key[p] for p in all['practice']]
 all['practice'] = practice
@@ -240,6 +255,11 @@ agb_comp = agb_comp[(pd.notnull(agb_comp.chap_stock)) |
 agb_comp['stock_diff_chap'] = agb_comp['card_stock'] - agb_comp['chap_stock']
 agb_comp['stock_diff_whrc'] = agb_comp['card_stock'] - agb_comp['whrc_stock']
 agb_comp['stock_diff_sant'] = agb_comp['card_stock'] - agb_comp['sant_stock']
+
+# add a column indicating locations that are in WHRC data but not in Chapman
+# data
+agb_comp['in_chap'] = ((pd.notnull(agb_comp['whrc_stock'])) &
+                       (pd.notnull(agb_comp['chap_stock'])))
 
 
 #############################
@@ -381,7 +401,8 @@ for col_fn, ax in zip(cat_cols.items(), axs):
         if plot_fn == 'scat':
             sns.scatterplot(x=col,
                         y='stock',
-                        hue='var',
+                        hue='practice',
+                        markers='var',
                         data=suball,
                         alpha=.7,
                         ax=ax)
@@ -428,7 +449,7 @@ for col_fn, ax in zip(cat_cols.items(), axs):
 
 fig1.show()
 
-# plot diffs between Cardinael and Chapman, Cardinael and Santoro
+# plot diffs between Cardinael and Chapman, Cardinael and WHRC, Cardinael and Santoro
 fig2, axs2 = plt.subplots(3,2)
 axs2 = axs2.flatten()
 for i, col in enumerate(['chap_stock', 'whrc_stock', 'sant_stock']):
@@ -442,6 +463,7 @@ for i, col in enumerate(['chap_stock', 'whrc_stock', 'sant_stock']):
     sns.scatterplot(x='card_stock',
                     y=col,
                     hue='practice',
+                    marker='in_chap',
                     data=agb_comp,
                     ax=axs2[0+(2*i)])
     axs2[0+(2*i)].set_xlim([0, 1.05*agb_comp[col].max()])
@@ -485,7 +507,7 @@ df_discrep_by_dataset_prac = agb_comp.melt(id_vars=['practice'],
                                                        'stock_diff_whrc',
                                                        'stock_diff_sant'])
 fig3, ax = plt.subplots(1,1)
-sns.violinplot(x='practice', y='value', hue='variable',
+sns.boxenplot(x='practice', y='value', hue='variable',
               data=df_discrep_by_dataset_prac)
 ax.plot(ax.get_xlim(), [0,0], '--k', linewidth=2, alpha=0.25)
 fig3.show()

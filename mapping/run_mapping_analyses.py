@@ -90,6 +90,9 @@ chapman_C_agg = gpd.read_file(('./chapman_data_aggregated/'
                                'chapman_crop_and_pasture_country_agg.shp'))
 chapman_ag_area_agg = gpd.read_file(('./chapman_data_aggregated/'
                                        './chapman_ag_land_area_country_agg.shp'))
+roe = pd.read_excel('./Roe_et_al_SI.xlsx',
+                    sheet_name='1. Sectoral mitigation-country',
+                    skiprows=10)
 ndc_contrib_raw = pd.read_csv(('./NDC_contribs/pathway_mitigation_potential_and_NDC'
                                '_targets_with_ISO3.csv'))
 af_locs = gpd.read_file(('AF_locations_from_papers/'
@@ -199,6 +202,14 @@ chapman_potential = pd.merge(countries, chapman_potential,
 for c in ['density_crop', 'density_pasture']:
     chapman_potential[c] = chapman_potential[c]/2
 
+# merge Roe et al. 2021 estimates onto this, also expressed in Mg C
+subroe = roe.loc[:, ['ISO', 'agrofor_techcum', 'agrofor_techden',
+                        'agrofor_feascum', 'agrofor_feasden']]
+for col in subroe.columns[1:]:
+    subroe[col] = subroe[col] * 1e6 * (12.0107/(2 * 15.999))
+potential = pd.merge(chapman_potential, subroe,
+                     left_on='iso_a3', right_on='ISO', how='left')
+
 
 def get_continents(df):
     conts = []
@@ -233,6 +244,7 @@ rosenstock['cont'] = get_continents(rosenstock)
 chapman_C_agg['cont'] = get_continents(chapman_C_agg)
 chapman_ag_area_agg['cont'] = get_continents(chapman_ag_area_agg)
 chapman_potential['cont'] = get_continents(chapman_potential)
+potential['cont'] = get_continents(potential)
 af_locs['cont'] = get_continents(af_locs)
 
 
@@ -246,11 +258,11 @@ def hex2rgba(hex, alpha=255):
     return rgba
 
 
-# merge rosenstock and chapman data
+# merge rosenstock and potential data
 ndcs = []
 ncs = []
 namas = []
-for i, row in chapman_potential.iterrows():
+for i, row in potential.iterrows():
     iso3 = row['iso_a3']
     subdf_rosenstock = rosenstock[rosenstock['cn_ISO3'] == iso3]
     if len(subdf_rosenstock) == 1:
@@ -264,17 +276,20 @@ for i, row in chapman_potential.iterrows():
     else:
         print(subdf_rosenstock)
         raise(ValueError)
-chapman_potential['NDC'] = ndcs
-chapman_potential['NC'] = ncs
-chapman_potential['NAMA'] = namas
+potential['NDC'] = ndcs
+potential['NC'] = ncs
+potential['NAMA'] = namas
 
 
-# add country-aggregated ag land area col to country-aggregated ag woody C,
-# then get area-normalized woody C
-chapman_ag_area_agg['ha'] = chapman_ag_area_agg['sum']/10_000
-chapman_C_agg['ha_ag_land'] = chapman_ag_area_agg['ha']
-chapman_C_agg['Mg_C_per_ha'] = chapman_C_agg['sum']/chapman_C_agg['ha_ag_land']
-
+# add area-weighted average ag woody C density
+# (i.e., pasture woody C weighted by pasture land area, same or crop, then sum)
+assert np.allclose(potential.area_crop + potential.area_pasture,
+                   potential.total_area, equal_nan=True)
+potential['wt_avg_density'] = (((potential['area_crop'] *
+                                 potential['density_crop']) + 
+                                (potential['area_pasture'] *
+                                 potential['density_pasture'])) /
+                               potential['total_area'])
 
 # prep NDC contributions analysis
 # subset and rename cols
@@ -284,6 +299,12 @@ ndc_contrib = ndc_contrib_raw.loc[:, ['iso3',
                     'Cost-effective Trees in Agriculture Lands [Chapman]',
                     'Reforestation (GROA)',
                     'Cost-effective Reforestation (GROA)',
+                    'Nutrient Management',
+                    'Cost-effective Nutrient Management',
+                    'Optimal Grazing Intensity',
+                    'Cost-effective Optimal Grazing Intensity',
+                    'Grazing Legumes',
+                    'Cost-effective Grazing Legumes',
                     '(Sharon et al) Emissions Reduction Target',
                     '(Sharon et al) NDC Reduction Percent',
                     '(Sharon et al) Reference Year Emissions Rate',
@@ -296,6 +317,12 @@ ndc_contrib.columns = ['iso3',
               'tia_ce',
               'refor',
               'refor_ce',
+              'nut',
+              'nut_ce',
+              'opt_graz',
+              'opt_graz_ce',
+              'leg_graz',
+              'leg_graz_ce',
               'targ',
               'red_pct',
               'ref_yr',
@@ -308,25 +335,42 @@ ndc_contrib['pct_tia'] = ndc_contrib['tia']/ndc_contrib['targ'] * 100
 ndc_contrib['pct_tia_ce'] = ndc_contrib['tia_ce']/ndc_contrib['targ'] * 100
 ndc_contrib['pct_refor'] = ndc_contrib['refor']/ndc_contrib['targ'] * 100
 ndc_contrib['pct_refor_ce'] = ndc_contrib['refor_ce']/ndc_contrib['targ'] * 100
+# calculate trees in ag as pct of refor and of other ag NCS
+ndc_contrib['tia_as_pct_refor'] = ndc_contrib['tia']/ndc_contrib['refor'] * 100
+ndc_contrib['tia_as_pct_refor_ce'] = ndc_contrib['tia_ce']/ndc_contrib['refor_ce'] * 100
+ndc_contrib['tia_as_pct_nut'] = ndc_contrib['tia']/ndc_contrib['nut'] * 100
+ndc_contrib['tia_as_pct_nut_ce'] = ndc_contrib['tia_ce']/ndc_contrib['nut_ce'] * 100
+ndc_contrib['tia_as_pct_opt_graz'] = ndc_contrib['tia']/ndc_contrib['opt_graz'] * 100
+ndc_contrib['tia_as_pct_opt_graz_ce'] = ndc_contrib['tia_ce']/ndc_contrib['opt_graz_ce'] * 100
+ndc_contrib['tia_as_pct_leg_graz'] = ndc_contrib['tia']/ndc_contrib['leg_graz'] * 100
+ndc_contrib['tia_as_pct_leg_graz_ce'] = ndc_contrib['tia_ce']/ndc_contrib['leg_graz_ce'] * 100
+# get rid of infs resulting from division by 0
+ndc_contrib.replace(np.inf, np.nan, inplace=True)
+
+
+
 
 
 
 ##### ANALYSIS OF DENSITY IN NDC AND NON-NDC COUNTRIES
 # prep data
-data_for_figs = chapman_potential.loc[:, ['area_crop',
-                                      'area_pasture',
-                                      'total_area',
-                                      'density_crop',
-                                      'density_pasture',
-                                      'potential_crop',
-                                      'potential_pasture',
-                                      'total_potential',
-                                      'total_biomass',
-                                      'ISO_A3',
-                                      'NDC',
-                                      'NAME_EN',
-                                      'cont',
-                                      'geometry']]
+data_for_figs = potential.loc[:, ['area_crop',
+                                  'area_pasture',
+                                  'total_area',
+                                  'wt_avg_density',
+                                  'density_crop',
+                                  'density_pasture',
+                                  'potential_crop',
+                                  'potential_pasture',
+                                  'total_potential',
+                                  'total_biomass',
+                                  'agrofor_techcum',
+                                  'agrofor_feascum',
+                                  'ISO_A3',
+                                  'NDC',
+                                  'NAME_EN',
+                                  'cont',
+                                  'geometry']]
 
 data_for_figs = data_for_figs[np.invert(pd.isnull(data_for_figs['NDC']))]
 data_for_figs = data_for_figs[data_for_figs['total_area']>0]
@@ -353,8 +397,7 @@ for i, col in enumerate(['density_crop', 'density_pasture']):
                         data=data_for_figs,
                         #inner='box',
                         #orient='h',
-                        #palette=['#d1caa7', '#b4edb5'],
-                        palette=['#ffd9e6', '#c9e4ff'],
+                        palette=['#877f78', '#3cb55e'],
                        )
     cont_lookup = dict(zip(data_for_figs.cont.unique(),
                            range(len(data_for_figs.cont.unique()))))
@@ -424,11 +467,11 @@ if save_it:
 
 # set colormaps
 cmaplist_NDC = []
-for val, color in zip([0,1], ['#c9e4ff', '#003873']):
+for val, color in zip([0,1], ['#b4f29b', '#1f6e00']):
     cmaplist_NDC.append((val, color))
 cmap_NDC = LinearSegmentedColormap.from_list("custom", cmaplist_NDC)
 cmaplist_nonNDC = []
-for val, color in zip([0,1], ['#ffd9e6', '#730027']):
+for val, color in zip([0,1], ['#c9c6b9', '#5e534b']):
     cmaplist_nonNDC.append((val, color))
 cmap_nonNDC = LinearSegmentedColormap.from_list("custom", cmaplist_nonNDC)
 cmaps = {0: cmap_nonNDC,
@@ -445,10 +488,10 @@ max_cbar_val = max_cbar_val + (max_cbar_val % 5)
 cbar_title_lookup = {0: 'AF not in NDC', 1: 'AF in NDC'}
 
 
-for i, col in enumerate(['density_crop', 'density_pasture']):
+for i, col in enumerate(['wt_avg_density']):
     fig2 = plt.figure()
-    fig2.suptitle(('average woody C density in %s, with '
-                   'known agroforestry locations') % col.split('_')[1])
+    fig2.suptitle(('average woody C density in ag lands, with '
+                   'known agroforestry locations'))
 
 
     # plot it
@@ -486,10 +529,10 @@ for i, col in enumerate(['density_crop', 'density_pasture']):
     lcax.yaxis.set_label_position('left')
 
     # outline missing country boundaries
-    chapman_potential[pd.isnull(chapman_potential.NDC)].plot(edgecolor='black',
-                                                     facecolor='white',
-                                                     linewidth=0.25,
-                                                     ax=ax)
+    potential[pd.isnull(potential.NDC)].plot(edgecolor='black',
+                                            facecolor='white',
+                                            linewidth=0.25,
+                                            ax=ax)
     # add locations
     ax.scatter(af_locs.geometry.x, af_locs.geometry.y,
                c='black',
@@ -507,8 +550,7 @@ for i, col in enumerate(['density_crop', 'density_pasture']):
 
 
     if save_it:
-        fig2.savefig(('%s_woody_C_density_and_known_AF_locs'
-                      '.png') % col.split('_')[1],
+        fig2.savefig('woody_C_density_and_known_AF_locs.png',
                      dpi=dpi, orientation='landscape')
 
 
@@ -516,20 +558,24 @@ for i, col in enumerate(['density_crop', 'density_pasture']):
 #### MAP OF DEFICIT
 
 # recast potential as % deficit,
-# TODO: FIGURE OUT IF FOR SOME REASON TOTAL POTENTIAL IS EXPRESSED IN Mg C
-#       INSTEAD OF Mg BIOMASS LIKE EVERYTHING ELSE, BECAUSE IF SO I NEED TO
-#       CORRECT FOR THAT!
 # and cap at 0% deficit
+# (NOTE: combines Roe feasible potential numbers and Chapman current numbers)
 # (the countries that have a potential number lower than
 #  the current number are just the really high-density ones in Africa
 #  and small Caribbean Islands (as well as Kosovo, Turkmenistan, and Suriname)
 #  so that makes sense because all the data were used together to set 'potential'
-data_for_figs['abs_deficit'] = np.clip(((data_for_figs['total_potential'] -
-                                     data_for_figs['total_biomass'])),
+data_for_figs['abs_deficit'] = np.clip(((data_for_figs['agrofor_feascum'] -
+                                     data_for_figs['total_biomass']/2)),
                                        a_min = 0, a_max = None)
-data_for_figs['deficit'] = np.clip(((data_for_figs['total_potential'] -
-                                     data_for_figs['total_biomass'])/(
-                data_for_figs['total_potential']))*100, a_min = 0, a_max = None)
+#data_for_figs['abs_deficit'] = np.clip(((data_for_figs['total_potential'] -
+                                     #data_for_figs['total_biomass'])),
+                                       #a_min = 0, a_max = None)
+#data_for_figs['deficit'] = np.clip(((data_for_figs['total_potential'] -
+#                                     data_for_figs['total_biomass'])/(
+                #data_for_figs['total_potential']))*100, a_min = 0, a_max = None)
+data_for_figs['deficit'] = np.clip(((data_for_figs['agrofor_feascum'] -
+                                     data_for_figs['total_biomass']/2)/(
+                data_for_figs['agrofor_feascum']))*100, a_min = 0, a_max = None)
 
 max_cbar_val = 100
 min_cbar_val = 0
@@ -582,16 +628,16 @@ lcax.yaxis.set_label_position('left')
 #       but that's probably more misleading than just omitting those countries,
 #       as I do now...
 # outline countries with missing potential values
-data_for_figs[pd.isnull(data_for_figs.total_potential)].plot(edgecolor='black',
+data_for_figs[pd.isnull(data_for_figs.agrofor_feascum)].plot(edgecolor='black',
                                                              facecolor='white',
                                                              linewidth=0.25,
                                                              ax=ax)
 
 # outline missing country boundaries
-chapman_potential[pd.isnull(chapman_potential.NDC)].plot(edgecolor='black',
-                                                 facecolor='white',
-                                                 linewidth=0.25,
-                                                 ax=ax)
+potential[pd.isnull(potential.NDC)].plot(edgecolor='black',
+                                         facecolor='white',
+                                         linewidth=0.25,
+                                         ax=ax)
 # add locations
 ax.scatter(af_locs.geometry.x, af_locs.geometry.y,
            c='black',
@@ -647,19 +693,22 @@ lo, md, hi = np.nanpercentile(data_for_figs['avg_density'], [10, 50, 90])
 # assign colors based on lo, md, hi and yes/no studies present
 
 
-# TOTAL POTENTIAL VS DEFICIT
-colors = {'AF not in NDC':mpl.colors.hex2color('#910a3e'),
-          'AF in NDC': mpl.colors.hex2color('#18548f')
+
+
+# SCATTER TOTAL POTENTIAL VS DEFICIT
+colors = {'AF not in NDC':mpl.colors.hex2color('#1f6e00'),
+          'AF in NDC': mpl.colors.hex2color('#5e534b')
          }
+
 # rank the pt counts
 data_for_figs['count_rank'] = data_for_figs['count'].rank(method='dense')
 fig5, ax = plt.subplots(1,1)
 sns.scatterplot(x=data_for_figs['deficit'],
                 # TODO: DECIDE IF I'M CORRECT THAT I NEED TO /2 HERE TO GET Mg C
-                y=data_for_figs['total_potential']/2,
+                y=data_for_figs['agrofor_feascum']/2,
                 style=['o' if c>0 else 'x' for c in data_for_figs['count']],
                 hue=data_for_figs['NDC_num'],
-                palette=['#910a3e', '#18548f'],
+                palette=['#5e534b', '#1f6e00'],
                 size=data_for_figs['count_rank'],
                 sizes=(50, 300),
                 alpha=0.4,
@@ -693,11 +742,11 @@ legend_elements = legend_elements + [Line2D([0], [0],
                                            ) for l, s in [('few studies', 6),
                                                         ('many studies', 15)]]
 ax.legend(handles=legend_elements, loc='upper left')
-qtile = np.nanpercentile(data_for_figs['total_potential'], 90)
+qtile = np.nanpercentile(data_for_figs['agrofor_feascum'], 90)
 for i, row in data_for_figs.iterrows():
-    if row['total_potential']>qtile:
+    if row['agrofor_feascum']>qtile:
         ax.text(row['deficit'],
-                (row['total_potential']/2) + 0.005e8,
+                (row['agrofor_feascum']/2) + 0.005e8,
                 row['NAME_EN'],
                )
 ax.set_xlabel('woody C deficit (% below total potential)',
@@ -729,7 +778,7 @@ df_hist.columns = ['country', 'estimate_type', 'percent_NDC_target', 'NCS']
 fig_hists, axs = plt.subplots(2,1)
 sns.histplot(x="percent_NDC_target",
                           hue='NCS',
-                          alpha=0.5,
+                          alpha=0.25,
                           binwidth=2.5,
                           binrange=(0,110),
                           legend=True,
@@ -738,7 +787,7 @@ sns.histplot(x="percent_NDC_target",
                          )
 sns.histplot(x="percent_NDC_target",
                           hue='NCS',
-                          alpha=0.5,
+                          alpha=0.25,
                           binwidth=2.5,
                           binrange=(0,110),
                           legend=True,
@@ -753,6 +802,41 @@ for i, ax in enumerate(axs):
         ax.set_title('Cost-effective')
         ax.set_xlabel('achievable percent of NDC target')
 fig_hists.show()
+
+
+# make histograms comparing absolute potential between NCS
+fig_hists2, axs = plt.subplots(2,1)
+for comparator in ['refor', 'nut', 'opt_graz', 'leg_graz']:
+    print("tia_as_pct_%s" % comparator, np.nanmedian(ndc_contrib["tia_as_pct_%s" % comparator]))
+    sns.histplot(x="tia_as_pct_%s" % comparator,
+                      alpha=0.25,
+                      binwidth=2.5,
+                      binrange=(0,110),
+                      legend=True,
+                      ax=axs[0],
+                      data=ndc_contrib,
+                     )
+    print("tia_as_pct_%s_ce" % comparator, np.nanmedian(ndc_contrib["tia_as_pct_%s_ce" % comparator]))
+    sns.histplot(x="tia_as_pct_%s_ce" % comparator,
+                      alpha=0.25,
+                      binwidth=2.5,
+                      binrange=(0,110),
+                      legend=True,
+                      ax=axs[1],
+                      data=ndc_contrib,
+                     )
+    print('---------------------------------------------')
+for i, ax in enumerate(axs):
+    ax.set_ylabel('count')
+    if i == 0:
+        ax.set_title('Max potential')
+    if i == 1:
+        ax.set_title('Cost-effective')
+        ax.set_xlabel('agrforestry potential expressed as percent of other NCS')
+fig_hists2.show()
+
+
+
 
 # merge onto countries
 ndc_contrib_map = pd.merge(countries, ndc_contrib,
@@ -803,4 +887,55 @@ fig_map.show()
 if save_it:
     fig_map.savefig('NDC_contributions_map.png',
                     dpi=dpi, orientation='portrait')
+
+
+# PERCENT OF NDC VS TOTAL NDC SIZE
+# rank the pt counts
+fig6, ax = plt.subplots(1,1)
+ndc_contrib_for_scat = pd.merge(ndc_contrib, data_for_figs,
+                                left_on='iso3', right_on='ISO_A3',
+                                how='outer')
+sns.scatterplot(x='pct_tia_ce',
+                y='targ',
+                #style=['o' if c>0 else 'x' for c in data_for_figs['count']],
+                hue='NDC_num',
+                palette=['#5e534b', '#1f6e00'],
+                size='red_pct',
+                sizes=(50, 300),
+                alpha=0.4,
+                data=ndc_contrib_for_scat,
+                ax=ax)
+
+legend_elements = [Line2D([0], [0],
+                          marker='o',
+                          color=c,
+                          label=l,
+                          linewidth=0,
+                          markersize=6,
+                          alpha=0.4) for l, c in colors.items()]
+legend_elements = legend_elements + [Line2D([0], [0], color='black', label='')]
+legend_elements = legend_elements + [Line2D([0], [0],
+                                            marker='o',
+                                            color='black',
+                                            alpha=0.5,
+                                            label=l,
+                                            linewidth=0,
+                                            markersize=s
+                                           ) for l, s in [('NDC target low', 6),
+                                                        ('NDC target ambitious', 15)]]
+ax.legend(handles=legend_elements, loc='upper left')
+qtile = np.nanpercentile(ndc_contrib_for_scat['targ'], 90)
+for i, row in ndc_contrib_for_scat.iterrows():
+    if row['targ']>qtile:
+        ax.text(row['pct_tia_ce'],
+                row['targ'],
+                 row['NAME_EN'],
+               )
+ax.set_xlabel('contribution of cost-effective\nAF to NDC target (%)',
+              fontdict={'fontsize': 20})
+ax.set_ylabel('NDC target ($Tg\ CO_2e\ yr^{-1}$)',
+              fontdict={'fontsize': 20})
+fig6.show()
+
+
 
