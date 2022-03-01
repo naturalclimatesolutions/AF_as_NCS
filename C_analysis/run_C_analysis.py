@@ -6,6 +6,7 @@ import matplotlib.colors as colors
 from matplotlib.patches import Polygon
 from matplotlib.collections import PatchCollection
 from mpl_toolkits.axes_grid1 import make_axes_locatable
+from scipy.spatial import ConvexHull
 import seaborn as sns
 from latlon_utils import get_climate
 import re, os
@@ -168,16 +169,16 @@ soc['var'] = 'soc'
 all = pd.concat((agb, bgb, soc))
 
 # remap practice names
-practice_key = {'Parkland': 'park',
-                'Silvoarable': 'intercrop_alley_silvoar',
-                'Intercropping': 'intercrop_alley_silvor',
+practice_key = {'Parkland': 'silvoar_and_park',
+                'Silvoarable': 'silvoar_and_park',
+                'Intercropping': 'intercropping',
                 'Fallow': 'fallow',
-                'Silvopasture': 'silvopas',
+                'Silvopasture': 'silvopasture',
                 'Multistrata': 'multistrata',
                 'Shaded_perennial': 'multistrata',
                 'Shaded_perennial ': 'multistrata',
-                'Hedgerow': 'hedge',
-                'Alley_cropping': 'intercrop_alley_silvor',
+                'Hedgerow': 'hedgerow',
+                'Alley_cropping': 'alley',
                }
 practice = [practice_key[p] for p in all['practice']]
 all['practice'] = practice
@@ -385,6 +386,7 @@ cat_cols = {'age_sys': 'scat',
             ('new_mat', 'new_map'): 'heat',
            }
 
+
 def normalize(vals, min_out=0, max_out=1):
     if max_out <= min_out:
         max_out = min_out+1
@@ -402,7 +404,7 @@ for col_fn, ax in zip(cat_cols.items(), axs):
             sns.scatterplot(x=col,
                         y='stock',
                         hue='practice',
-                        markers='var',
+                        style='var',
                         data=suball,
                         alpha=.7,
                         ax=ax)
@@ -412,7 +414,6 @@ for col_fn, ax in zip(cat_cols.items(), axs):
                       hue='var',
                       data=suball,
                       ax=ax)
-
     elif isinstance(col, tuple):
         whittaker = pd.read_csv('whittaker_biomes.csv', sep=';')
         whittaker['temp_c'] = whittaker['temp_c'].apply(lambda x:
@@ -434,8 +435,22 @@ for col_fn, ax in zip(cat_cols.items(), axs):
             ax.text(*centroid, biome, fontdict={'fontsize': 9})
         col1, col2 = col
         suball = all[(pd.notnull(all[col1])) & (pd.notnull(all[col2]))]
-        sns.scatterplot(x='new_mat',
-                        y='new_map',
+        # add practice-specific contours
+        practices = all.practice.unique()
+        prac_colors = dict(zip(practices,
+                             plt.cm.Accent(np.linspace(0, 1, len(practices)))))
+        prac_polys = []
+        for practice in practices:
+            prac_df = all.loc[all.practice == practice, [col1, col2]]
+            hull = ConvexHull(prac_df.values)
+            prac_poly = Polygon(prac_df.values[hull.vertices, :])
+            #prac_poly.set_color(prac_colors[practice])
+            prac_polys.append(prac_poly)
+        prac_polys = PatchCollection(prac_polys, alpha=0.25, edgecolor='k',
+                                     facecolors=[*prac_colors.values()])
+        ax.add_collection(prac_polys)
+        sns.scatterplot(x=col1,
+                        y=col2,
                         hue='stock',
                         size=normalize(all['stock'], 200, 500),
                         style='practice',
@@ -446,59 +461,73 @@ for col_fn, ax in zip(cat_cols.items(), axs):
                         ax=ax)
         ax.set_xlabel('MAT ($^{○}C$)')
         ax.set_ylabel('MAP ($cm$)')
-
 fig1.show()
 
 # plot diffs between Cardinael and Chapman, Cardinael and WHRC, Cardinael and Santoro
-fig2, axs2 = plt.subplots(3,2)
-axs2 = axs2.flatten()
-for i, col in enumerate(['chap_stock', 'whrc_stock', 'sant_stock']):
-    stock_diff_col = {'chap_stock': 'stock_diff_chap',
-                      'whrc_stock': 'stock_diff_whrc',
-                      'sant_stock': 'stock_diff_sant'}[col]
-    dataset_label = {'chap_stock': 'Chapman et al. 2020',
-                     'whrc_stock': 'WHRC et al. unpub. 2022',
-                     'sant_stock': 'Santoro et al. 2021'}[col]
-    axs2[0+(2*i)].plot([0,70], [0,70], ':k')
-    sns.scatterplot(x='card_stock',
-                    y=col,
-                    hue='practice',
-                    marker='in_chap',
-                    data=agb_comp,
-                    ax=axs2[0+(2*i)])
-    axs2[0+(2*i)].set_xlim([0, 1.05*agb_comp[col].max()])
-    axs2[0+(2*i)].set_xlabel(('published woody C density estimate\n($Mg\ C\ ha^{-1}$);'
-                       ' Cardinael et al. 2018'))
-    axs2[0+(2*i)].set_ylabel(('remotely sensed woody C density estimate\n($Mg\ C\ ha^{-1}$);'
-                       ' %s') % dataset_label)
-    divider = make_axes_locatable(axs2[1+(2*i)])
-    cax = divider.append_axes("bottom", size="5%", pad=0.25)
-    axs2[1+(2*i)].set_xticks(())
-    axs2[1+(2*i)].set_xticklabels(())
-    axs2[1+(2*i)].set_yticks(())
-    axs2[1+(2*i)].set_yticklabels(())
-    countries = gpd.read_file('../mapping/country_bounds/NewWorldFile_2020.shp')
-    countries = countries.to_crs(4326)
-    countries.plot(facecolor='none',
-                   edgecolor='black',
-                   linewidth=0.25,
-                   ax=axs2[1+(2*i)])
-    scat=axs2[1+(2*i)].scatter(x=agb_comp.lon,
-                         y=agb_comp.lat,
-                         c=agb_comp[stock_diff_col],
-                         cmap='RdBu',
-                         s=100,
-                         edgecolors='black',
-                         linewidth=0.75,
-                         alpha=0.7,
-                         vmin=-225,
-                         vmax=225,
-                        )
-    plt.colorbar(scat, orientation="horizontal", cax=cax,
-                 label=('published estimate (Cardinael et al.'
-                        ' 2018) - remote sensing estimate'
-                        ' (%s) ($Mg\ C\ ha^{-1}$)') % dataset_label)
-    cax.set_title('discrepancy')
+fig2, axs2 = plt.subplots(1,2)
+col = 'whrc_stock'
+stock_diff_col = 'stock_diff_whrc'
+dataset_label = 'WHRC et al. unpub. 2022'
+ax = axs2[0]
+ax.plot([-2.5, 5.5], [-2.5, 5.5], ':k', alpha=0.3)
+sns.scatterplot(x=np.log(agb_comp.card_stock),
+                y=np.log(agb_comp[col]),
+                hue='practice',
+                style='in_chap',
+                markers={True: 'o', False: 'X'},
+                s=100,
+                alpha=0.5,
+                data=agb_comp,
+                ax=ax)
+#ax.set_xlim([-2.5, 5.5])
+#ax.set_ylim([-2.5, 5.5])
+med_log = np.nanmedian(np.log(agb_comp.card_stock))
+chap_med_log = np.nanmedian(np.log(agb_comp[agb_comp.in_chap].card_stock))
+med_abs = np.nanmedian(agb_comp.card_stock)
+chap_med_abs = np.nanmedian(agb_comp[agb_comp.in_chap].card_stock)
+ax.plot([med_log]*2+[-2.5], [-2.5]+[med_log]*2, '-k', alpha=0.5)
+ax.plot([chap_med_log]*2+[-2.5], [-2.5]+[chap_med_log]*2, ':k', alpha=0.5)
+ax.text(0.89*med_log, -2.4, ('median, all sites: $%0.2f\ Mg\ '
+                      'ha^{-1}$') % med_abs,
+        fontdict={'fontsize': 10, 'rotation': 'vertical'})
+ax.text(0.87*chap_med_log, -2.4, ('median, Chapman only $%0.2f\ '
+                           'Mg\ ha^{-1}$') % chap_med_abs,
+        fontdict={'fontsize': 10, 'rotation': 'vertical'})
+ax.set_xlabel(('log aboveground biomass density ($ln\ Mg\ ha^{-1}$)\n'
+               'published in primary studies (analyzed by Cardinael et al. '
+               '2018'), fontdict={'fontsize': 14})
+ax.set_ylabel(('log aboveground biomass density ($ln\ '
+               'Mg\ ha^{-1}$)\nremotely sensed (WHRC, '
+               'ca. 2000'), fontdict={'fontsize': 14})
+ax = axs2[1]
+divider = make_axes_locatable(ax)
+cax = divider.append_axes("bottom", size="5%", pad=0.25)
+ax.set_xticks(())
+ax.set_xticklabels(())
+ax.set_yticks(())
+ax.set_yticklabels(())
+countries = gpd.read_file('../mapping/country_bounds/NewWorldFile_2020.shp')
+countries = countries.to_crs(4326)
+countries.plot(facecolor='none',
+               edgecolor='black',
+               linewidth=0.25,
+               ax=ax)
+scat=ax.scatter(x=agb_comp.lon,
+                y=agb_comp.lat,
+                c=agb_comp[stock_diff_col],
+                cmap='RdBu',
+                s=100,
+                edgecolors='black',
+                linewidth=0.75,
+                alpha=0.7,
+                vmin=-225,
+                vmax=225,
+               )
+plt.colorbar(scat, orientation="horizontal", cax=cax,
+             label=('published estimate (Cardinael et al.'
+                    ' 2018) - remote sensing estimate'
+                    ' (%s) ($Mg\ C\ ha^{-1}$)') % dataset_label)
+cax.set_title('discrepancy')
 fig2.show()
 
 # show discrepancy by dataset and system type
