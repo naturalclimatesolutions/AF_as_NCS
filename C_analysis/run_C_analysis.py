@@ -12,6 +12,7 @@ from latlon_utils import get_climate
 import re, os
 
 
+
 ###############################################
 # load data
 ###############################################
@@ -56,6 +57,11 @@ agb = agb.loc[:, ['Description',
                   'AGB Sequestration rate ',
                   'BGB Sequestration rate ',
                  ]]
+
+# NOTE: get rid of Adesina data b/c it's from a model, not from primary lit
+agb = agb[[not ref.startswith('Adesina') for ref in agb['Full Technical Reference']]]
+
+
 agb.columns = ['meas_type',
                'practice',
                'stock',
@@ -178,7 +184,7 @@ practice_key = {'Parkland': 'silvoar_and_park',
                 'Shaded_perennial': 'multistrata',
                 'Shaded_perennial ': 'multistrata',
                 'Hedgerow': 'hedgerow',
-                'Alley_cropping': 'alley',
+                'Alley_cropping': 'intercropping',
                }
 practice = [practice_key[p] for p in all['practice']]
 all['practice'] = practice
@@ -463,81 +469,159 @@ for col_fn, ax in zip(cat_cols.items(), axs):
         ax.set_ylabel('MAP ($cm$)')
 fig1.show()
 
-# plot diffs between Cardinael and Chapman, Cardinael and WHRC, Cardinael and Santoro
-fig2, axs2 = plt.subplots(1,2)
-col = 'whrc_stock'
-stock_diff_col = 'stock_diff_whrc'
+
+
+
+# ridgeline plot:
+# (code adapted from: https://www.python-graph-gallery.com/ridgeline-graph-seaborn)
+# first, generate a color palette with Seaborn.color_palette(),
+# then repeat first color twice, so that dummy plot to be removed doesn't cause
+# colors to be misaligned with scatterplot colors
+pracs = agb_comp.practice.unique()
+pal = sns.color_palette(n_colors=len(agb_comp.practice.unique()))
+pal = np.vstack((pal[0], pal))
+# set shared x-axis lims
+ax_lims = [-3.1, 3.1]
+# add fake extra practice that will occupy first facetgrid row (to then be
+# deleted and replaced with scatterplot)
+extra_rows = agb_comp.iloc[:2,]
+extra_rows['practice'] = 'AAAAAAAA'
+agb_comp_extra_rows = pd.concat((agb_comp, extra_rows))
+
+# add column with logged cardinael stock values
+agb_comp['card_stock_log'] = np.log10(agb_comp['card_stock'])
+
+# get the SOC carbon to create comparison ridgeline plot from
+soc_comp = all[all['var'] == 'soc']
+soc_comp['card_stock_log'] = np.log10(soc_comp['stock'])
+# TODO: WHAT TO DO ABOUT NEG VALUES THAT GET DROPPED WHEN LOGGED?
+
+# TODO: ENSURE THAT PRACTICES ARE ALL THE SAME AND ORDERED THE SAME
+
+# TODO: PLOTTING AGB STOCK BUT SOC STOCK CHANGE?? HOW TO RECONCILE?
+
+# create a sns.FacetGrid class, and set hue to practice 
+# (and make top axes much taller than rest, to accomodate scatterplot
+g_agb = sns.FacetGrid(agb_comp, row='practice', hue='practice',
+                  aspect=15, height=0.75, palette=pal,
+                  gridspec_kws={'height_ratios': [1]+([0.1]*(len(pracs)))})
+
+
+# then we add the densities kdeplots for each month
+g_agb.map(sns.kdeplot, 'card_stock_log', log_scale=False,
+          bw_adjust=1, clip_on=False, fill=True, alpha=0.5, linewidth=1.5)
+# here we add a white line that represents the contour of each kdeplot
+g_agb.map(sns.kdeplot, 'card_stock_log', common_norm=True, log_scale=False,
+          bw_adjust=1, clip_on=False, color="w", lw=2)
+
+
+# same thing for SOC
+g_soc =  sns.FacetGrid(soc_comp, row='practice', hue='practice',
+                  aspect=15, height=0.75*((0.1*len(pracs))/(1+0.1*len(pracs))),
+                       palette=pal[1:])
+g_soc.map(sns.kdeplot, 'card_stock_log', log_scale=False,
+          bw_adjust=1, clip_on=False, fill=True, alpha=0.5, linewidth=1.5)
+g_soc.map(sns.kdeplot, 'card_stock_log', common_norm=True, log_scale=False,
+          bw_adjust=1, clip_on=False, color="w", lw=2)
+# invert the y axes
+for ax in g_soc.axes[0]:
+    ax.invert_yaxis()
+
+
+# here we add a horizontal line for each plot
+g_agb.map(plt.axhline, y=0, lw=2, clip_on=False, alpha=0.4)
+g_soc.map(plt.axhline, y=0, lw=2, clip_on=False, alpha=0.4)
+# we loop over the FacetGrid figure axes (g.axes.flat) and add the month as
+# text with the right color
+# notice how ax.lines[-1].get_color() enables you to access the last line's
+# color in each matplotlib.Axes
+for i, ridge_ax in enumerate(g_agb.axes.flat[1:]):
+        ridge_ax.text(1e-1, 0.1, pracs[i],
+                fontweight='bold', fontsize=15, color=ridge_ax.lines[-1].get_color())
+        ridge_ax.set_ylim((-0.2, 0.8))
+        ridge_ax.set_xlim(ax_lims)
+        if i < (len(g_agb.axes.flat)-1):
+            ridge_ax.set_xticks([])
+        else:
+            ridge_ax.set_xticks(tick_locs, tick_labs)
+
+for i, ridge_ax in enumerate(g_soc.axes.flat):
+        ridge_ax.text(1e-1, 0.1, pracs[i],
+                fontweight='bold', fontsize=15, color=ridge_ax.lines[-1].get_color())
+        ridge_ax.set_ylim((-0.2, 0.8))
+        ridge_ax.set_xlim(ax_lims)
+        if i < (len(g_soc.axes.flat)-1):
+            ridge_ax.set_xticks([])
+        else:
+            ridge_ax.set_xticks(tick_locs, tick_labs)
+
+# use matplotlib.Figure.subplots_adjust() function to get the
+# subplots to overlap
+for g in [g_agb, g_soc]:
+    g.fig.subplots_adjust(hspace=-0.4)
+    # remove axes titles, yticks and spines
+    g.set_titles("")
+    g.set(yticks=[])
+    g.despine(bottom=True, left=True)
+    #plt.setp(tick_labs, fontsize=15, fontweight='bold')
+
+g_agb.axes[0][-1].set_xlabel('AGB stock change ($Mg\ ha^{-1}$)', fontweight='bold', fontsize=15)
+g_soc.axes[0][-1].set_xlabel('SOC stock change ($Mg\ ha^{-1}$)', fontweight='bold', fontsize=15)
+
+# take top axes object of the AGB ridgeline plot for the scatterplot
+ax_scat = g_agb.axes[0,0]
+# clear them
+ax_scat.cla()
+    
+    # plot diffs between Cardinael and Chapman, Cardinael and WHRC, Cardinael and Santoro
+# replace true zeros with 0.01, then manually relabel the axes, to be able to
+# use log-log scale but still reflect true 0s
+agb_comp['whrc_stock_false0'] = agb_comp.whrc_stock.apply(
+                                        lambda x: (x*(x>0)) + (0.001*(x==0)))
+agb_comp['whrc_stock_false0_log'] = np.log10(agb_comp['whrc_stock_false0'])
+agb_comp['card_stock_log'] = np.log10(agb_comp['card_stock'])
+col = 'whrc_stock_false0_log'
 dataset_label = 'WHRC et al. unpub. 2022'
-ax = axs2[0]
-ax.plot([-2.5, 5.5], [-2.5, 5.5], ':k', alpha=0.3)
-sns.scatterplot(x=np.log(agb_comp.card_stock),
-                y=np.log(agb_comp[col]),
+ax_scat.plot([-100, 100], [-100, 100], ':k', alpha=0.3)
+
+# median marks (Chapman sites and all sites)
+med_log = np.nanmedian(np.log10(agb_comp.card_stock))
+chap_med_log = np.nanmedian(np.log10(agb_comp[agb_comp.in_chap].card_stock))
+med_abs = np.nanmedian(agb_comp.card_stock)
+chap_med_abs = np.nanmedian(agb_comp[agb_comp.in_chap].card_stock)
+ax_scat.plot([med_log], [med_log], 'ok', alpha=1, markersize=15)
+ax_scat.plot([chap_med_log], [chap_med_log], 'Xk', alpha=1, markersize=15)
+
+sns.scatterplot(x='card_stock_log',
+                y=col,
                 hue='practice',
                 style='in_chap',
-                markers={True: 'o', False: 'X'},
+                markers={True: 'X', False: 'o'},
+                palette=pal[1:], # drop the dummy first palette color
                 s=100,
                 alpha=0.5,
                 data=agb_comp,
-                ax=ax)
-#ax.set_xlim([-2.5, 5.5])
-#ax.set_ylim([-2.5, 5.5])
-med_log = np.nanmedian(np.log(agb_comp.card_stock))
-chap_med_log = np.nanmedian(np.log(agb_comp[agb_comp.in_chap].card_stock))
-med_abs = np.nanmedian(agb_comp.card_stock)
-chap_med_abs = np.nanmedian(agb_comp[agb_comp.in_chap].card_stock)
-ax.plot([med_log]*2+[-2.5], [-2.5]+[med_log]*2, '-k', alpha=0.5)
-ax.plot([chap_med_log]*2+[-2.5], [-2.5]+[chap_med_log]*2, ':k', alpha=0.5)
-ax.text(0.89*med_log, -2.4, ('median, all sites: $%0.2f\ Mg\ '
-                      'ha^{-1}$') % med_abs,
-        fontdict={'fontsize': 10, 'rotation': 'vertical'})
-ax.text(0.87*chap_med_log, -2.4, ('median, Chapman only $%0.2f\ '
-                           'Mg\ ha^{-1}$') % chap_med_abs,
-        fontdict={'fontsize': 10, 'rotation': 'vertical'})
-ax.set_xlabel(('log aboveground biomass density ($ln\ Mg\ ha^{-1}$)\n'
+                legend=False,
+                ax=ax_scat)
+
+ax_scat.set_xlim(ax_lims)
+ax_scat.set_ylim(ax_lims)
+tick_locs = [-3, -2, -1, 0, 1, 2, 3]
+tick_labs = ['0  \\\\',
+             '$10^{-2}$',
+             '$10^{-1}$',
+             '$10^{0}$',
+             '$10^{1}$',
+             '$10^{2}$',
+             '$10^{3}$']
+ax_scat.set_xticks(tick_locs, tick_labs)
+ax_scat.set_yticks(tick_locs, tick_labs)
+
+# label x axis at bottom of FacetGrid
+g_agb.axes[-1,0].set_xlabel(('$log_{10}$ aboveground biomass density ($log_{10}\ Mg\ ha^{-1}$)\n'
                'published in primary studies (analyzed by Cardinael et al. '
                '2018'), fontdict={'fontsize': 14})
-ax.set_ylabel(('log aboveground biomass density ($ln\ '
-               'Mg\ ha^{-1}$)\nremotely sensed (WHRC, '
-               'ca. 2000'), fontdict={'fontsize': 14})
-ax = axs2[1]
-divider = make_axes_locatable(ax)
-cax = divider.append_axes("bottom", size="5%", pad=0.25)
-ax.set_xticks(())
-ax.set_xticklabels(())
-ax.set_yticks(())
-ax.set_yticklabels(())
-countries = gpd.read_file('../mapping/country_bounds/NewWorldFile_2020.shp')
-countries = countries.to_crs(4326)
-countries.plot(facecolor='none',
-               edgecolor='black',
-               linewidth=0.25,
-               ax=ax)
-scat=ax.scatter(x=agb_comp.lon,
-                y=agb_comp.lat,
-                c=agb_comp[stock_diff_col],
-                cmap='RdBu',
-                s=100,
-                edgecolors='black',
-                linewidth=0.75,
-                alpha=0.7,
-                vmin=-225,
-                vmax=225,
-               )
-plt.colorbar(scat, orientation="horizontal", cax=cax,
-             label=('published estimate (Cardinael et al.'
-                    ' 2018) - remote sensing estimate'
-                    ' (%s) ($Mg\ C\ ha^{-1}$)') % dataset_label)
-cax.set_title('discrepancy')
-fig2.show()
-
-# show discrepancy by dataset and system type
-df_discrep_by_dataset_prac = agb_comp.melt(id_vars=['practice'],
-                                           value_vars=['stock_diff_chap',
-                                                       'stock_diff_whrc',
-                                                       'stock_diff_sant'])
-fig3, ax = plt.subplots(1,1)
-sns.boxenplot(x='practice', y='value', hue='variable',
-              data=df_discrep_by_dataset_prac)
-ax.plot(ax.get_xlim(), [0,0], '--k', linewidth=2, alpha=0.25)
-fig3.show()
+g_soc.axes[-1,0].set_xlabel(('$log_{10}$ SOC stock change after AF adoption ($log_{10}\ Mg\ ha^{-1}$)\n'
+               'published in primary studies (analyzed by Cardinael et al. '
+               '2018'), fontdict={'fontsize': 14})
 

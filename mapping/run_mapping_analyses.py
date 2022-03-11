@@ -9,6 +9,7 @@ from mpl_toolkits.axes_grid1 import make_axes_locatable
 import seaborn as sns
 from shapely.geometry import Polygon
 from scipy.stats import ttest_ind
+from scipy import stats
 from copy import deepcopy
 import warnings
 
@@ -43,7 +44,6 @@ max_y=1
 savefig=True
 savefig=True
 x_buff=max_x/20
-orientation='landscape'
 savefig=True
 
 # TODO:
@@ -179,14 +179,14 @@ for country in ['Haiti', 'Dominican Rep.', 'Bahamas',
                 'Guatemala', 'Belize',
                 'Puerto Rico', 'Jamaica',
                 'Cuba', 'Trinidad and Tobago']:
-    countries.loc[countries.name == country, 'continent'] = 'C. Am./Car.'
+    countries.loc[countries.name == country, 'continent'] = 'South America'
 
 # dissolve to continents
 continents = countries.dissolve('continent')
 
 # shorten continent names
-continents.index = ['Af.', 'Antarctica', 'Asia', 'C. Am./Car.',
-                    'Eur.', 'N. Am.', 'Oceania', 'Seven seas', 'S. Am.']
+continents.index = ['Af.', 'Antarctica', 'Asia',
+                    'Eur.', 'N. Am.', 'Oceania', 'Seven seas', 'C./S. Am.']
 
 # load the Chapman SI datasets, then merge onto countries to make spatial
 # (NOTE: I found no good metadata doc for her SI data,
@@ -286,7 +286,7 @@ potential['NAMA'] = namas
 assert np.allclose(potential.area_crop + potential.area_pasture,
                    potential.total_area, equal_nan=True)
 potential['wt_avg_density'] = (((potential['area_crop'] *
-                                 potential['density_crop']) + 
+                                 potential['density_crop']) +
                                 (potential['area_pasture'] *
                                  potential['density_pasture'])) /
                                potential['total_area'])
@@ -366,16 +366,17 @@ data_for_figs = potential.loc[:, ['area_crop',
                                   'total_biomass',
                                   'agrofor_techcum',
                                   'agrofor_feascum',
+                                  'agrofor_feasden',
                                   'ISO_A3',
                                   'NDC',
                                   'NAME_EN',
                                   'cont',
                                   'geometry']]
-
 data_for_figs = data_for_figs[np.invert(pd.isnull(data_for_figs['NDC']))]
 data_for_figs = data_for_figs[data_for_figs['total_area']>0]
 data_for_figs['NDC_num'] = data_for_figs['NDC']
 data_for_figs['NDC'] = data_for_figs['NDC'].map(lambda x: {1:'yes', 0:'no'}[x])
+data_for_figs['agrofor_feasden_Mgha'] = data_for_figs['agrofor_feasden']/1e6
 
 
 
@@ -459,6 +460,55 @@ if save_it:
                   dpi=dpi, orientation='portrait')
 
 
+def format_map_axes(ax, tcax, bcax, map_type, max_tickval=None):
+    """
+    Function to custom format all the map images
+    """
+    assert map_type in ['current', 'pct_below', 'pct_NDC']
+    # bound the longitude (cuts off Hawaii, but no data there, and otherwise
+    # makes plot nicer; also cuts out Antarctica)
+    ax.set_xlim((-13700000, 16500000))
+    ax.set_ylim((-7000000, 8550000))
+    # get rid of ticks and ticklabels on map axes
+    #ax.set_xlabel('$^{\circ} lon.')
+    #ax.set_ylabel('$^{\circ} lat.')
+    ax.set_xticks([])
+    ax.set_xticklabels([])
+    ax.set_yticks([])
+    ax.set_yticklabels([])
+    # format colorbar axes
+    tcax.xaxis.set_ticks_position('top')
+    bcax.xaxis.set_ticks_position('bottom')
+    tcax.xaxis.set_label_position('top')
+    tcax.xaxis.set_label_text(tcax.xaxis.get_label_text(), fontdict={'fontsize': 18})
+    bcax.xaxis.set_label_text(tcax.xaxis.get_label_text(), fontdict={'fontsize': 18})
+    tcax.tick_params(labelsize=14)
+    bcax.tick_params(labelsize=14)
+    #tcax.set_xticks(tcax.get_xticks())
+    #tcax.set_xticklabels(tcax.get_xticklabels(), fontdict={'fontsize': 12})
+    #tcax.set_title(cbar_title_lookup[1], loc='left',
+        #               fontdict={'fontsize':14, 'fontweight': 'bold'})
+    #bcax.set_title(cbar_title_lookup[0], loc='left',
+        #               fontdict={'fontsize':14, 'fontweight': 'bold'})
+    # fix ticklabels on colorbars
+    for cax in [tcax, bcax]:
+        ticklocs = cax.xaxis.get_ticklocs()
+        curr_ticklabs = cax.xaxis.get_ticklabels()
+        new_ticklabs = []
+        for n, loc in enumerate(ticklocs):
+            if map_type == 'pct_NDC':
+                new_ticklabs.append(('$≥$ '* (loc >= max_tickval)) + '%i%%' % int(loc))
+            elif map_type == 'pct_below':
+                new_ticklabs.append('%i%%' % int(loc))
+            elif map_type == 'current':
+                if n%2 == 0:
+                    new_ticklabs.append('%i' % loc)
+        if map_type == 'current':
+            ticklocs = [tl for n, tl in enumerate(ticklocs) if n%2 == 0]
+        cax.set_xticks(ticklocs, new_ticklabs)
+
+
+
 #### MAPS OF CURRENT CARBON DENSITY
 # plot AF sites on top of area-normalized ag woody C density
 # and on top of percentage of potential C realized,
@@ -479,9 +529,8 @@ cmaps = {0: cmap_nonNDC,
         }
 # get the max value to display on the choropleth colorbars
 # (max val in the data, rounded up to nearest multiple of 5)
-max_cbar_val = max(int(data_for_figs.density_crop.max()),
-                   int(data_for_figs.density_pasture.max()))
-max_cbar_val = max_cbar_val + (max_cbar_val % 5)
+max_cbar_val = int(data_for_figs.wt_avg_density.max())
+max_cbar_val = max_cbar_val + (5*((max_cbar_val // 5)+1) - max_cbar_val)
 # plot NDC and non-NDC countries' woody C density separately
 cbar_title_lookup = {0: 'AF not in NDC', 1: 'AF in NDC'}
 for i, col in enumerate(['wt_avg_density']):
@@ -490,10 +539,7 @@ for i, col in enumerate(['wt_avg_density']):
     #               'known agroforestry locations'))
     # plot it
     ax = fig2.add_subplot(111)
-    # bound the longitude (cuts of Hawaii, but no data there, and otherwise
-    # makes plot nicer
-    ax.set_xlim((-13700000, 16500000))
-    ax.set_ylim((-7000000, 8550000))
+
     divider = make_axes_locatable(ax)
     #cax = divider.append_axes("bottom", size="5%", pad=0.1)
     tcax = divider.append_axes("top", size="7%", pad=0.1)
@@ -518,19 +564,6 @@ for i, col in enumerate(['wt_avg_density']):
                          legend_kwds={'label': 'Mg woody C/ha',
                                       'orientation': "horizontal"},
                          cax=cax_dict[NDC_status])
-        #tcax.set_title(cbar_title_lookup[1], loc='left',
-        #               fontdict={'fontsize':14, 'fontweight': 'bold'})
-        #bcax.set_title(cbar_title_lookup[0], loc='left',
-        #               fontdict={'fontsize':14, 'fontweight': 'bold'})
-    tcax.xaxis.set_ticks_position('top')
-    bcax.xaxis.set_ticks_position('bottom')
-    tcax.xaxis.set_label_position('top')
-    tcax.xaxis.set_label_text(tcax.xaxis.get_label_text(), fontdict={'fontsize': 18})
-    bcax.xaxis.set_label_text(tcax.xaxis.get_label_text(), fontdict={'fontsize': 18})
-    tcax.tick_params(labelsize=14)
-    bcax.tick_params(labelsize=14)
-    #tcax.set_xticks(tcax.get_xticks())
-    #tcax.set_xticklabels(tcax.get_xticklabels(), fontdict={'fontsize': 12})
     # outline missing country boundaries
     potential[pd.isnull(potential.NDC)].to_crs(8857).plot(edgecolor='black',
                                             facecolor='white',
@@ -542,12 +575,7 @@ for i, col in enumerate(['wt_avg_density']):
                c='black',
                s=9,
                alpha=1)
-    #ax.set_xlabel('$^{\circ} lon.')
-    #ax.set_ylabel('$^{\circ} lat.')
-    ax.set_xticks([])
-    ax.set_xticklabels([])
-    ax.set_yticks([])
-    ax.set_yticklabels([])
+    format_map_axes(ax, tcax, bcax, 'current')
     fig2.show()
 
 
@@ -557,25 +585,25 @@ for i, col in enumerate(['wt_avg_density']):
 
 
 
-#### MAP OF DEFICIT
+#### MAP PCT BELOW POTENTIAL STOCKING
 
-# recast potential as % deficit,
-# and cap at 0% deficit
+# recast potential as % below potential,
+# and cap at 0% below potential
 # (NOTE: combines Roe feasible potential numbers and Chapman current numbers)
 # (the countries that have a potential number lower than
 #  the current number are just the really high-density ones in Africa
 #  and small Caribbean Islands (as well as Kosovo, Turkmenistan, and Suriname)
 #  so that makes sense because all the data were used together to set 'potential'
-data_for_figs['abs_deficit'] = np.clip(((data_for_figs['agrofor_feascum'] -
+data_for_figs['abs_below'] = np.clip(((data_for_figs['agrofor_feascum'] -
                                      data_for_figs['total_biomass']/2)),
                                        a_min = 0, a_max = None)
-#data_for_figs['abs_deficit'] = np.clip(((data_for_figs['total_potential'] -
+#data_for_figs['abs_below'] = np.clip(((data_for_figs['total_potential'] -
                                      #data_for_figs['total_biomass'])),
                                        #a_min = 0, a_max = None)
-#data_for_figs['deficit'] = np.clip(((data_for_figs['total_potential'] -
+#data_for_figs['pct_below'] = np.clip(((data_for_figs['total_potential'] -
 #                                     data_for_figs['total_biomass'])/(
                 #data_for_figs['total_potential']))*100, a_min = 0, a_max = None)
-data_for_figs['deficit'] = np.clip(((data_for_figs['agrofor_feascum'] -
+data_for_figs['pct_below'] = np.clip(((data_for_figs['agrofor_feascum'] -
                                      data_for_figs['total_biomass']/2)/(
                 data_for_figs['agrofor_feascum']))*100, a_min = 0, a_max = None)
 
@@ -587,26 +615,26 @@ cbar_title_lookup = {0: 'AF not in NDC', 1: 'AF in NDC'}
 
 
 fig3 = plt.figure()
-fig3.suptitle('deficit in potential ag woody C density in current stocks (%%)')
+fig3.suptitle('current percent below feasible ag woody C density')
 
 # plot it
 ax = fig3.add_subplot(111)
 divider = make_axes_locatable(ax)
 #cax = divider.append_axes("bottom", size="5%", pad=0.1)
-rcax = divider.append_axes("right", size="5%", pad=0.1)
-lcax = divider.append_axes("left", size="5%", pad=0.1)
-cax_dict = {0: lcax, 1:rcax}
+tcax = divider.append_axes("top", size="5%", pad=0.1)
+bcax = divider.append_axes("bottom", size="5%", pad=0.1)
+cax_dict = {0: bcax, 1:tcax}
 
 
 for NDC_status in range(2):
     subdf = data_for_figs[data_for_figs.NDC_num == NDC_status]
     if NDC_status == 1:
         edgecolor = 'black'
-        linewidth = 0.25
+        linewidth = 0.75
     else:
         edgecolor='black'
-        linewidth=0.25
-    map = subdf.plot('deficit',
+        linewidth=0.75
+    map = subdf.to_crs(8857).plot('pct_below',
                      ax=ax,
                      vmin=0,
                      vmax=max_cbar_val,
@@ -614,52 +642,56 @@ for NDC_status in range(2):
                      edgecolor=edgecolor,
                      linewidth=linewidth,
                      legend=True,
-                     legend_kwds={'label': 'percent deficit',
-                                  'orientation': "vertical"},
+                     legend_kwds={'label': 'percent below potential',
+                                  'orientation': "horizontal"},
                      cax=cax_dict[NDC_status])
-
-rcax.set_title(cbar_title_lookup[1])
-lcax.set_title(cbar_title_lookup[0])
-lcax.yaxis.set_ticks_position('left')
-lcax.yaxis.set_label_position('left')
 
 # TODO: FIGURE OUT WHY POTENTIAL_CROP OR POTENTIAL_PASTURE IS NAN
 #       FOR SOME COUNTRIES (it makes total_potential nan too);
-#       I could some the potential value that she does have with the current
+#       I could sum the potential value that she does have with the current
 #       for the other value to get a low estimate of total potential,
 #       but that's probably more misleading than just omitting those countries,
 #       as I do now...
 # outline countries with missing potential values
-data_for_figs[pd.isnull(data_for_figs.agrofor_feascum)].plot(edgecolor='black',
-                                                             facecolor='white',
-                                                             linewidth=0.25,
-                                                             ax=ax)
+data_for_figs[pd.isnull(data_for_figs.agrofor_feascum)].to_crs(8857).plot(
+                                                    edgecolor='black',
+                                                    facecolor='white',
+                                                    linewidth=0.25,
+                                                    ax=ax)
 
 # outline missing country boundaries
-potential[pd.isnull(potential.NDC)].plot(edgecolor='black',
-                                         facecolor='white',
-                                         linewidth=0.25,
-                                         ax=ax)
-
-#ax.set_xlabel('$^{\circ} lon.')
-#ax.set_ylabel('$^{\circ} lat.')
-ax.set_xticks([])
-ax.set_xticklabels([])
-ax.set_yticks([])
-ax.set_yticklabels([])
-
+potential[pd.isnull(potential.NDC)].to_crs(8857).plot(edgecolor='black',
+                                                      facecolor='white',
+                                                      linewidth=0.25,
+                                                      ax=ax)
+format_map_axes(ax, tcax, bcax, 'pct_below', max_tickval=100)
 fig3.show()
 
 
 if save_it:
-    fig3.savefig('woody_C_deficit.png',
+    fig3.savefig('woody_C_pct_below.png',
                   dpi=dpi, orientation='landscape')
 
 
 
 
 
-# SCATTER TOTAL POTENTIAL VS DEFICIT
+# SCATTER TOTAL POTENTIAL VS PCT BELOW
+
+# get count of points in each country poly
+dfsjoin = gpd.sjoin(data_for_figs, af_locs)
+dfsjoin['count'] = 1
+counts = dfsjoin.groupby(['NAME_EN']).sum()['count']
+
+# add a point-density col in data_for_figs
+data_for_figs['count'] = 0
+for cntry in counts.index:
+    data_for_figs.loc[data_for_figs['NAME_EN'] == cntry, 'count'] = counts[cntry]
+data_for_figs['pt_density'] = data_for_figs['count']/data_for_figs['total_area']
+
+# determine breakpoints between low, mod, and high avg_density
+lo, md, hi = np.nanpercentile(data_for_figs['wt_avg_density'], [10, 50, 90])
+
 colors = {'AF not in NDC':mpl.colors.hex2color('#1f6e00'),
           'AF in NDC': mpl.colors.hex2color('#5e534b')
          }
@@ -667,7 +699,7 @@ colors = {'AF not in NDC':mpl.colors.hex2color('#1f6e00'),
 # rank the pt counts
 data_for_figs['count_rank'] = data_for_figs['count'].rank(method='dense')
 fig5, ax = plt.subplots(1,1)
-sns.scatterplot(x=data_for_figs['deficit'],
+sns.scatterplot(x=data_for_figs['pct_below'],
                 # TODO: DECIDE IF I'M CORRECT THAT I NEED TO /2 HERE TO GET Mg C
                 y=data_for_figs['agrofor_feascum']/2,
                 style=['o' if c>0 else 'x' for c in data_for_figs['count']],
@@ -708,12 +740,12 @@ ax.legend(handles=legend_elements, loc='upper left')
 qtile = np.nanpercentile(data_for_figs['agrofor_feascum'], 95)
 for i, row in data_for_figs.iterrows():
     if row['agrofor_feascum']>qtile:
-        ax.text(row['deficit'],
+        ax.text(row['pct_below'],
                 (row['agrofor_feascum']/2) + 0.005e8,
                  row['NAME_EN'],
                  fontdict={'fontsize':8},
                 )
-ax.set_xlabel('woody C deficit (% below total potential)',
+ax.set_xlabel('% below total potential woody C',
               fontdict={'fontsize': 20})
 ax.set_ylabel('total potential woody C (Mg)',
               fontdict={'fontsize': 20})
@@ -745,44 +777,34 @@ ndc_contrib_map = pd.merge(countries, ndc_contrib,
 ndc_contrib_map = pd.merge(ndc_contrib_map, data_for_figs.loc[:, ['ISO_A3', 'NDC_num']],
          left_on='iso_a3', right_on='ISO_A3', how='outer')
 
-fig_map, axs = plt.subplots(2, 1)
+fig_map, ax = plt.subplots(1, 1)
 fig_map.suptitle('percent of NDC targets achievable by agroforestry (Baruch-Mordo et al. 2018)')
-for ax, col in zip(axs, ['pct_tia', 'pct_tia_ce']):
-    divider = make_axes_locatable(ax)
-    rcax = divider.append_axes("right", size="5%", pad=0.1)
-    lcax = divider.append_axes("left", size="5%", pad=0.1)
-    cax_dict = {0: lcax, 1:rcax}
+divider = make_axes_locatable(ax)
+tcax = divider.append_axes("top", size="5%", pad=0.1)
+bcax = divider.append_axes("bottom", size="5%", pad=0.1)
+cax_dict = {0: bcax, 1:tcax}
 
-    countries.plot(facecolor='none',
-               edgecolor='black',
-               linewidth=0.25,
-               ax=ax)
-    ax.set_xticks(())
-    ax.set_xticklabels(())
-    ax.set_yticks(())
-    ax.set_yticklabels(())
-    for NDC_status in range(2):
-        subdf = ndc_contrib_map[ndc_contrib_map.NDC_num == NDC_status]
-        map = subdf.plot(col,
-                         ax=ax,
-                         vmin=0,
-                         vmax=100,
-                         cmap=cmaps[NDC_status],
-                         edgecolor=edgecolor,
-                         linewidth=linewidth,
-                         legend=True,
-                         legend_kwds={'label': 'percent NDC target achievable',
-                                      'orientation': "vertical"},
-                         cax=cax_dict[NDC_status])
-
-    rcax.set_title(cbar_title_lookup[1])
-    lcax.set_title(cbar_title_lookup[0])
-    lcax.yaxis.set_ticks_position('left')
-    lcax.yaxis.set_label_position('left')
-
-axs[0].set_title('max potential mitigation')
-axs[1].set_title('cost-effective mitigation')
-
+countries.to_crs(8857).plot(facecolor='none',
+           edgecolor='black',
+           linewidth=0.25,
+           ax=ax)
+max_pct=30
+for NDC_status in range(2):
+    subdf = ndc_contrib_map[ndc_contrib_map.NDC_num == NDC_status]
+    map = subdf.to_crs(8857).plot('pct_tia_ce',
+                     ax=ax,
+                     vmin=0,
+                     vmax=max_pct,
+                     cmap=cmaps[NDC_status],
+                     edgecolor=edgecolor,
+                     linewidth=linewidth,
+                     legend=True,
+                     legend_kwds={'label': 'percent NDC target achievable',
+                                  'orientation': "horizontal"},
+                     cax=cax_dict[NDC_status])
+format_map_axes(ax, tcax, bcax, 'pct_NDC', max_tickval=max_pct)
+ax.set_title('cost-effective mitigation')
+# fix cbar ticklabels
 fig_map.show()
 
 if save_it:
@@ -835,7 +857,7 @@ for i, row in ndc_contrib_for_scat.iterrows():
 qtile = np.nanpercentile(ndc_contrib_for_scat['pct_tia_ce'], 95)
 for i, row in ndc_contrib_for_scat.iterrows():
     if row['pct_tia_ce']>qtile:
-        # NOTE: adjusting Chad for reabaility
+        # NOTE: adjusting Chad for readability
         ax.text(row['pct_tia_ce']-(1*(row['NAME_EN']=='Chad')),
                 row['targ'],
                  row['NAME_EN'],
@@ -848,5 +870,52 @@ ax.set_ylabel('NDC target ($Tg\ CO_2e\ yr^{-1}$)',
               fontdict={'fontsize': 20})
 fig6.show()
 
+
+#is current woody C density roughly correlated with GDP?
+# NOTE: data from: https://data.worldbank.org/indicator/NY.GDP.MKTP.CD
+def scale_var(var):
+    return (var - np.min(var))/(np.max(var) - np.min(var))
+gdp = pd.read_csv('./API_NY.GDP.MKTP.CD_DS2_en_csv_v2_3731268.csv', skiprows=4)
+gdp_pcap = pd.read_csv('./API_NY.GDP.PCAP.CD_DS2_en_csv_v2_3731360.csv', skiprows=4)
+data_w_gdp = pd.merge(data_for_figs, gdp_pcap.loc[:, ['Country Code', '2000']],
+                      left_on='ISO_A3', right_on='Country Code')
+fig, ax = plt.subplots(1,1)
+data_w_gdp['log_gdp'] = np.log(data_w_gdp['2000'])
+data_w_gdp['log_dens'] = np.log(data_w_gdp['wt_avg_density'])
+sizes = 50 + scale_var(data_w_gdp['pct_below'])
+sns.scatterplot(x='log_gdp', y='log_dens', hue='cont', data=data_w_gdp, ax=ax,
+                size='total_potential', sizes=(50, 250),
+                style='NDC', style_order=('yes', 'no'),
+                edgecolor='black', linewidth=0.5, alpha=0.8, legend='brief')
+sns.regplot(x='log_gdp', y='log_dens', data=data_w_gdp, ax=ax, scatter=False)
+data_for_test = data_w_gdp.loc[:, ['log_gdp', 'log_dens']].dropna(how='any')
+r, p = stats.pearsonr(data_for_test['log_gdp'], data_for_test['log_dens'])
+ax.text(4.9, -5.8, '$R^2=%0.2f$' % r, color='red', fontstyle='italic')
+ax.text(4.9, -6.1, '$p=%0.4f$' % p, color='red', fontstyle='italic')
+for i, row in data_w_gdp.iterrows():
+    if row['log_dens'] < np.nanpercentile(data_w_gdp['log_dens'], 10):
+        ax.text(row['log_gdp'], row['log_dens'], row['NAME_EN'], color='gray')
+    if row['total_potential'] > np.nanpercentile(data_w_gdp['total_potential'], 90):
+        ax.text(row['log_gdp'], row['log_dens'], row['NAME_EN'], color='black')
+ax.set_xlabel('log GDP per capita (yr. 2000)', fontdict={'fontsize': 18})
+ax.set_ylabel('log average ag. woody C density (yr. 2000)', fontdict={'fontsize': 18})
+ax.set_xlim(4.823, 11.5)
+plt.legend(loc='upper right')
+fig.show()
+
+# Damien's suggestion
+fig, ax = plt.subplots(1,1)
+#sns.scatterplot(x=np.log(ndc_contrib_for_scat['wt_avg_density']), y='count',
+sns.scatterplot(x='wt_avg_density', y='count',
+                hue='cont',
+                size='pct_tia_ce', data=ndc_contrib_for_scat,
+                sizes=(30, 300))
+#sns.regplot(x='wt_avg_density', y='count', order=1,
+#                data=ndc_contrib_for_scat, scatter=False)
+for i, row in ndc_contrib_for_scat.iterrows():
+    if row['count'] > np.nanpercentile(ndc_contrib_for_scat['count'], 90):
+        ax.text(row['wt_avg_density'], row['count'], row['NAME_EN'], color='gray')
+    if row['pct_tia_ce'] > np.nanpercentile(ndc_contrib_for_scat['pct_tia_ce'], 90):
+        ax.text(row['wt_avg_density'], row['count'], row['NAME_EN'], color='black')
 
 
