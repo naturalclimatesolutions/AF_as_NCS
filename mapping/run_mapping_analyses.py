@@ -4,9 +4,13 @@ import geopandas as gpd
 import matplotlib as mpl
 import matplotlib.pyplot as plt
 from matplotlib.lines import Line2D
+from matplotlib.patches import Rectangle
+from matplotlib.collections import PatchCollection
 from matplotlib.colors import LinearSegmentedColormap
 from mpl_toolkits.axes_grid1 import make_axes_locatable
+import palettable
 import seaborn as sns
+import rioxarray as rxr
 from shapely.geometry import Polygon
 from scipy.stats import ttest_ind
 from scipy import stats
@@ -14,8 +18,29 @@ from copy import deepcopy
 import warnings
 
 
+# TODO:
+
+    # fix Chapman data export
+
+    # clean up Chapman map and format and save  (include deleting unneeded code
+    # there and at bottom)
+
+    # finalize next draft of scatterplot at bottom
+        # need to plot or at least test separate slopes for each region
+        # (folding Oceania into Asia I guess?)?
+
+    # combine and share back with group for comments (start wrapping up!)
+
+
+
+
 # plot params
-save_it = False
+save_it = True
+map_minx = -13700000
+map_maxx = 16500000
+map_miny = -7000000
+map_maxy = 8392644
+map_pal = palettable.cmocean.sequential.Speed_20.mpl_colormap
 suptitle_fontsize = 50
 title_fontsize = 40
 contour_axislab_fontsize = 10
@@ -80,7 +105,6 @@ savefig=True
     # follow up with Susan to schedule C fig brainstorm
 
     # continue reworking text
-
 
 
 # load datasets
@@ -149,7 +173,8 @@ rosenstock['NDCmnt'] = supplemented_NDCmnt
 
 # add continents to datasets
 countries = gpd.read_file(gpd.datasets.get_path('naturalearth_lowres'))
-
+# drop the one 'Seven seas (open ocean)' polygon
+countries = countries[np.invert(countries.continent == 'Seven seas (open ocean)')]
 # manually change some continent assignments (French Guiana, Russia)
 countries.loc[countries['name'] == 'Russia', 'continent'] = 'Asia'
 fake_row = countries.iloc[0,:]
@@ -162,16 +187,21 @@ real_france_poly = france_poly.intersection(Polygon([[-10,20], [30,20],
                                                        [-10,20]]))
 countries = countries[np.invert(countries.name == 'France')]
 france_row = deepcopy(fake_row)
-france_row.name == 'France'
-france_row.geometry = france_poly
-france_row.continent = 'Europe'
+france_row['name'] = 'France'
+france_row['geometry'] = real_france_poly
+france_row['continent'] = 'Europe'
+france_row['iso_a3'] = 'FRA'
+france_row['gdp_md_est'] = np.nan
+france_row['pop_est'] = np.nan
 countries = countries.append(gpd.GeoDataFrame({**france_row}))
 french_guiana_row = deepcopy(fake_row)
-french_guiana_row.name == 'French Guiana'
-french_guiana_row.geometry = french_guiana_poly
-french_guiana_row.continent = 'South America'
+french_guiana_row['name'] = 'French Guiana'
+french_guiana_row['geometry'] = french_guiana_poly
+french_guiana_row['continent'] = 'South America'
+french_guiana_row['iso_a3'] = 'GUF'
+french_guiana_row['gdp_md_est'] = np.nan
+french_guiana_row['pop_est'] = np.nan
 countries = countries.append(gpd.GeoDataFrame({**french_guiana_row}))
-
 # create Central America and Caribbean
 for country in ['Haiti', 'Dominican Rep.', 'Bahamas',
                 'Panama', 'Costa Rica', 'Nicaragua',
@@ -179,14 +209,41 @@ for country in ['Haiti', 'Dominican Rep.', 'Bahamas',
                 'Guatemala', 'Belize',
                 'Puerto Rico', 'Jamaica',
                 'Cuba', 'Trinidad and Tobago']:
-    countries.loc[countries.name == country, 'continent'] = 'South America'
+    countries.loc[countries['name'] == country, 'continent'] = 'South America'
 
 # dissolve to continents
 continents = countries.dissolve('continent')
-
 # shorten continent names
-continents.index = ['Af.', 'Antarctica', 'Asia',
-                    'Eur.', 'N. Am.', 'Oceania', 'Seven seas', 'C./S. Am.']
+continents.index = ['Africa', 'Antarctica', 'Asia',
+                    'Europe', 'N. America', 'Oceania',
+                    'C. & S. America\n& Caribbean']
+# set continents' color palette
+#cont_palette = sns.color_palette('colorblind')
+cont_palette = ['#E94A35', # cinnabar
+                '#EC1B1B', # red
+                '#FF66D1', # pink
+                '#EC71FF', # light purple
+                '#5D40EC', # blue
+                '#9636FC', # purple
+               ]
+# set color for each row
+cont_colors = []
+cont_ct = 0
+for cont in continents.index:
+    if cont == 'Antarctica':
+        cont_colors.append((0,0,0))
+    else:
+        cont_colors.append(cont_palette[cont_ct])
+        cont_ct += 1
+continents['color'] = cont_colors
+
+# load Chapman raster data
+chap_rast = rxr.open_rasterio('./chapman_all_Mg_C_ha_ca2km_EPSG_8857.tif',
+                              masked=True,
+                              cache=False,
+                              chunks=(5, 5),
+                             )
+chap_rast = chap_rast.rio.clip_box(map_minx, map_miny, map_maxx, map_maxy)
 
 # load the Chapman SI datasets, then merge onto countries to make spatial
 # (NOTE: I found no good metadata doc for her SI data,
@@ -380,542 +437,403 @@ data_for_figs['agrofor_feasden_Mgha'] = data_for_figs['agrofor_feasden']/1e6
 
 
 
-# plot dists of mean woody C/m^2 land area for countries w/ and w/out AF in NDCs
-fig_1 = plt.figure()
-#fig_1 = plt.figure(dpi=dpi,
-#                   figsize=(fig1_width, fig1_height))
-#gs = fig.add_gridspec(nrows=9, ncols=5,
-#                      height_ratios=[1,1,1,1,1.5,1,1,1,1])
-fig_1.suptitle(('average crop and pasture woody C density in\n'
-                'countries that do and do not mention AF in NDCs'))
-for i, col in enumerate(['density_crop', 'density_pasture']):
-    ax = fig_1.add_subplot(1,2,i+1)
-    ax.set_title(col, fontdict={'fontsize': 15})
-    sns.set_theme(style="whitegrid")
-    ax = sns.boxenplot(ax=ax,
-                        x='NDC',
-                        y=col,
-                        data=data_for_figs,
-                        #inner='box',
-                        #orient='h',
-                        palette=['#877f78', '#3cb55e'],
-                       )
-    cont_lookup = dict(zip(data_for_figs.cont.unique(),
-                           range(len(data_for_figs.cont.unique()))))
-    rev_cont_lookup = dict(zip(range(len(data_for_figs.cont.unique())),
-                           data_for_figs.cont.unique()))
-    x_offset_unit = 0.06
-    scat = ax.scatter(data_for_figs['NDC_num'] + (x_offset_unit *
-                                       (2+data_for_figs['cont'].map(lambda cont:
-                                                            cont_lookup[cont]))),
-               data_for_figs[col],
-               c = data_for_figs['cont'].map(lambda cont: cont_lookup[cont]),
-               s = 60,
-               cmap='Set3',
-               alpha=0.75,
-               edgecolor='black',
-               linewidth=0.5,
-               label=data_for_figs.cont,
-              )
-    #leg = ax.legend(*scat.legend_elements(), title='Continent')
-    ax.set_xlabel('mention agroforestry in NDC?')
-    ax.set_ylabel('mean %s woody C density\n($Mg C / ha$)' % col.split('_')[1])
-    for cont in data_for_figs.cont.unique():
-        for NDC_status in range(2):
-            x = NDC_status + (x_offset_unit * (2+cont_lookup[cont]))
-            y = -2
-            ax.text(x-0.005, y, cont, fontdict={'fontsize': 7,
-                                           'weight': 'bold',
-                                           'rotation': 'vertical'}, alpha=0.9)
-            ax.plot([x, x],
-                    [0, 25],
-                    color='black', linewidth=0.2, alpha=1)
+##########################################################################
+# PLOT 0: plot known AF locs and continent and country bounds over Chapman
+##########################################################################
 
 
-    # t-test of significant diff between NDC and non-NDC groups
-    res = ttest_ind(data_for_figs[data_for_figs.NDC_num==1][col],
-                    data_for_figs[data_for_figs.NDC_num==0][col],
-                   nan_policy='omit')
-    print(('\n\nt-test of sig. diff. between woody C ag-land density in NDC and '
-           'non-NDC countries:\n\tt-stat: %0.3f\n\tp-value: '
-           '%0.5f') % (res.statistic, res.pvalue))
-
-    ax.text(-0.45, 0.95*data_for_figs[col].max(),
-            't-stat: %0.3f\np-value: %0.5f' % (res.statistic, res.pvalue),
-            fontdict={'fontsize': 10, 'fontstyle': 'italic'})
-    ax.set_ylim([-2.5, 1.05*data_for_figs[col].max()])
-
-#fig_1.subplots_adjust(left=subplots_adj_left,
-#                    bottom=subplots_adj_bottom,
-#                    right=subplots_adj_right,
-#                    top=subplots_adj_top,
-#                    wspace=subplots_adj_wspace,
-#                    hspace=subplots_adj_hspace)
-
-
-fig_1.show()
-
-if save_it:
-    fig_1.savefig('woody_C_in_AF_NDC_non-NDC_countries.png',
-                  dpi=dpi, orientation='portrait')
-
-
-def format_map_axes(ax, tcax, bcax, map_type, max_tickval=None):
+def format_map_axes(ax, bcax, max_tickval=None):
     """
-    Function to custom format all the map images
+    Function to custom format map images
     """
-    assert map_type in ['current', 'pct_below', 'pct_NDC']
     # bound the longitude (cuts off Hawaii, but no data there, and otherwise
     # makes plot nicer; also cuts out Antarctica)
-    ax.set_xlim((-13700000, 16500000))
-    ax.set_ylim((-7000000, 8550000))
+    ax.set_xlim((map_minx, map_maxx))
+    ax.set_ylim((map_miny, map_maxy))
+    # get rid of axis labels
+    ax.set_xlabel('')
+    ax.set_ylabel('')
+    ax.set_title('')
     # get rid of ticks and ticklabels on map axes
-    #ax.set_xlabel('$^{\circ} lon.')
-    #ax.set_ylabel('$^{\circ} lat.')
     ax.set_xticks([])
     ax.set_xticklabels([])
     ax.set_yticks([])
     ax.set_yticklabels([])
     # format colorbar axes
-    tcax.xaxis.set_ticks_position('top')
     bcax.xaxis.set_ticks_position('bottom')
-    tcax.xaxis.set_label_position('top')
-    tcax.xaxis.set_label_text(tcax.xaxis.get_label_text(), fontdict={'fontsize': 18})
-    bcax.xaxis.set_label_text(tcax.xaxis.get_label_text(), fontdict={'fontsize': 18})
-    tcax.tick_params(labelsize=14)
+    bcax.xaxis.set_label_text('woody C density ($Mg\ C\ ha^{-1}$)',
+                              fontdict={'fontsize': 18})
     bcax.tick_params(labelsize=14)
-    #tcax.set_xticks(tcax.get_xticks())
-    #tcax.set_xticklabels(tcax.get_xticklabels(), fontdict={'fontsize': 12})
-    #tcax.set_title(cbar_title_lookup[1], loc='left',
-        #               fontdict={'fontsize':14, 'fontweight': 'bold'})
     #bcax.set_title(cbar_title_lookup[0], loc='left',
         #               fontdict={'fontsize':14, 'fontweight': 'bold'})
     # fix ticklabels on colorbars
-    for cax in [tcax, bcax]:
-        ticklocs = cax.xaxis.get_ticklocs()
-        curr_ticklabs = cax.xaxis.get_ticklabels()
-        new_ticklabs = []
-        for n, loc in enumerate(ticklocs):
-            if map_type == 'pct_NDC':
-                new_ticklabs.append(('$≥$ '* (loc >= max_tickval)) + '%i%%' % int(loc))
-            elif map_type == 'pct_below':
-                new_ticklabs.append('%i%%' % int(loc))
-            elif map_type == 'current':
-                if n%2 == 0:
-                    new_ticklabs.append('%i' % loc)
-        if map_type == 'current':
-            ticklocs = [tl for n, tl in enumerate(ticklocs) if n%2 == 0]
-        cax.set_xticks(ticklocs, new_ticklabs)
+    ticklocs = bcax.xaxis.get_ticklocs()
+    curr_ticklabs = bcax.xaxis.get_ticklabels()
+    new_ticklabs = []
+    for n, loc in enumerate(ticklocs):
+        if n%2 == 0:
+            new_ticklabs.append('%i' % loc)
+    ticklocs = [tl for n, tl in enumerate(ticklocs) if n%2 == 0]
+    bcax.set_xticks(ticklocs, new_ticklabs)
+
+
+map_pal.set_bad('white')
+map_pal.set_under('white')
+fig_0 = plt.figure(figsize=(12, 9))
+ax = fig_0.add_subplot(111)
+# axes at bottom for colorbar
+divider = make_axes_locatable(ax)
+bcax = divider.append_axes("bottom", size="7%", pad=0.1)
+# plot Chapman data
+chap_rast.squeeze().plot.imshow(cmap=map_pal,
+                                vmin=0,
+                                vmax=60,
+                                add_labels=False,
+                                add_colorbar=True,
+                                cbar_ax=bcax,
+                                cbar_kwargs={'orientation': 'horizontal'},
+                                ax=ax,
+                               )
+
+# plot countries and continents
+countries.to_crs(8857).plot(color='none',
+                            linewidth=0.25,
+                            edgecolor='black',
+                            ax=ax,
+                            )
+
+for cont in continents.index.unique():
+    if cont not in ['Antarctica', 'Seven Seas']:
+        data = continents.reset_index()[continents.reset_index()['index'] == cont]
+        data.to_crs(8857).plot(color='none',
+                               linewidth=1.5-(1.25*(cont == 'Antarctica')),
+                               edgecolor=data['color'].values[0],
+                               ax=ax,
+                               )
+
+# add locations
+ax.scatter(af_locs.to_crs(8857).centroid.x,
+           af_locs.to_crs(8857).centroid.y,
+           c='black',
+           s=7,
+           edgecolor='white',
+           linewidth=0.1,
+           alpha=1,
+          )
+
+# call map-formatting fn
+format_map_axes(ax, bcax)
+
+fig_0.show()
+if save_it:
+    fig_0.savefig('ag_woody_C_and_known_AF_locs.png',
+                 dpi=dpi, orientation='landscape')
 
 
 
-#### MAPS OF CURRENT CARBON DENSITY
-# plot AF sites on top of area-normalized ag woody C density
-# and on top of percentage of potential C realized,
-# with separate colormaps for NDC and non-NDC countries
-
-# set colormaps
-cmaplist_NDC = []
-for val, color in zip([0,1], ['#e4ffd9', '#1f6e00']):
-    cmaplist_NDC.append((val, color))
-cmap_NDC = LinearSegmentedColormap.from_list("custom", cmaplist_NDC)
-cmaplist_nonNDC = []
-for val, color in zip([0,1], ['#ebeae6', '#5e534b']):
-    cmaplist_nonNDC.append((val, color))
-cmap_nonNDC = LinearSegmentedColormap.from_list("custom", cmaplist_nonNDC)
-cmaps = {0: cmap_nonNDC,
-         #1: 'Greens',
-         1: cmap_NDC,
-        }
-# get the max value to display on the choropleth colorbars
-# (max val in the data, rounded up to nearest multiple of 5)
-max_cbar_val = int(data_for_figs.wt_avg_density.max())
-max_cbar_val = max_cbar_val + (5*((max_cbar_val // 5)+1) - max_cbar_val)
-# plot NDC and non-NDC countries' woody C density separately
-cbar_title_lookup = {0: 'AF not in NDC', 1: 'AF in NDC'}
-for i, col in enumerate(['wt_avg_density']):
-    fig2 = plt.figure()
-    #fig2.suptitle(('average woody C density in ag lands, with '
-    #               'known agroforestry locations'))
-    # plot it
-    ax = fig2.add_subplot(111)
-
-    divider = make_axes_locatable(ax)
-    #cax = divider.append_axes("bottom", size="5%", pad=0.1)
-    tcax = divider.append_axes("top", size="7%", pad=0.1)
-    bcax = divider.append_axes("bottom", size="7%", pad=0.1)
-    cax_dict = {0: bcax, 1:tcax}
-    for NDC_status in range(2):
-        subdf = data_for_figs[data_for_figs.NDC_num == NDC_status]
-        if NDC_status == 1:
-            edgecolor = 'black'
-            linewidth = 0.75
-        else:
-            edgecolor='black'
-            linewidth=0.75
-        map = subdf.to_crs(8857).plot(col,
-                         ax=ax,
-                         vmin=0,
-                         vmax=max_cbar_val,
-                         cmap=cmaps[NDC_status],
-                         edgecolor=edgecolor,
-                         linewidth=linewidth,
-                         legend=True,
-                         legend_kwds={'label': 'Mg woody C/ha',
-                                      'orientation': "horizontal"},
-                         cax=cax_dict[NDC_status])
-    # outline missing country boundaries
-    potential[pd.isnull(potential.NDC)].to_crs(8857).plot(edgecolor='black',
-                                            facecolor='white',
-                                            linewidth=0.25,
-                                            ax=ax)
-    # add locations
-    ax.scatter(af_locs.to_crs(8857).centroid.x,
-               af_locs.to_crs(8857).centroid.y,
-               c='black',
-               s=9,
-               alpha=1)
-    format_map_axes(ax, tcax, bcax, 'current')
-    fig2.show()
+#############################################################
+# PLOT 1: current and potential density, by continent and NDC
+#############################################################
 
 
-    if save_it:
-        fig2.savefig('woody_C_density_and_known_AF_locs.png',
-                     dpi=dpi, orientation='landscape')
+def scale_markersizes(vals, min_marksize=20, max_marksize=250, transform=None):
+    if transform == 'log':
+        vals = np.log10(vals)
+    # NOTE: perhaps makes most sense to scale with sqrt, since mpl expresses
+    #       scatterploint marker size in pt^^2, i.e., sqrt of point area;
+    #       however I don't really know anything about the science around
+    #       perception of size in plots...
+    elif transform == 'sqrt':
+        vals = np.sqrt(vals)
+    vals_0to1 = (vals - np.min(vals))/(np.max(vals) - np.min(vals))
+    scaled_vals = (vals_0to1 * (max_marksize - min_marksize)) + min_marksize
+    return scaled_vals
+
+
+# LOCAL PLOTTING PARAMS:
+# make jitters repeatable
+seed_num = 252
+np.random.seed(seed_num)
+# diameter for finding potentially overlapping points, when making beeswarm
+d_swarm = 0.05
+# additional jitter to add to potential values, to make the pots 'boil' more
+extra_jitter = 0.05
+# upper limit on jitter to add
+max_extra_jitter = 0.2
+# min and max markersizes for size-rescaling
+marksize = 15
+min_scattersize = 25
+max_scattersize = 500
+# nth quantile for country name plotting
+q = 0.9
+data_for_figs_long = data_for_figs.melt(id_vars=['NDC', 'cont',
+                                                 'agrofor_feascum', 'NAME_EN'],
+                                        value_vars=['wt_avg_density',
+                                                    'agrofor_feasden_Mgha'],
+                                        var_name='when',
+                                        value_name='density')
+# remap 'when' values
+when_vals = {'wt_avg_density': 'current',
+             'agrofor_feasden_Mgha': 'potential',
+            }
+data_for_figs_long['when'] = [when_vals[val] for val in data_for_figs_long['when']]
+data_for_figs_long['sizes'] = scale_markersizes(
+                                        data_for_figs_long['agrofor_feascum'],
+                                        min_marksize=min_scattersize,
+                                        max_marksize=max_scattersize,
+                                        transform='sqrt')
+# get names of countries in nth quantile for total feasible mitigation by 2050
+q_val = np.quantile(data_for_figs['agrofor_feascum'], q)
+q_countries = set(data_for_figs[data_for_figs[
+                                        'agrofor_feascum'] >= q_val].NAME_EN)
+fig_1 = plt.figure(figsize=(14,8))
+ax = fig_1.add_subplot(111)
+# use seaborn to get non-overlapping x,y points, but then feed them into
+# scatter myself, to be able to adjust facecolor and size
+points_dict = {}
+NDC_offset_dict = {'no': 0, 'yes': 0.5}
+xtick_locs = []
+xtick_labs = []
+for i, cont in enumerate(data_for_figs_long['cont'].unique()):
+    xtick_locs.append(i + 0.25)
+    xtick_labs.append(cont)
+    data = data_for_figs_long[data_for_figs_long['cont'] == cont]
+    points_dict[cont] = {}
+    for j, NDC_val in enumerate(['no', 'yes']):
+        points_dict[cont][NDC_val] = {}
+        subdata = data[data['NDC'] == NDC_val]
+        for k, when in enumerate(data_for_figs_long['when'].unique()):
+            subsubdata = subdata[subdata['when'] == when]
+            ys = subsubdata['density']
+            assert False not in [val == NDC_val for val in subsubdata['NDC']]
+            xs = [i + NDC_offset_dict[val] for val in subsubdata['NDC']]
+            orig_xy = np.stack((xs, ys)).T
+            if len(xs) > 0:
+                sp = sns.categorical._SwarmPlotter(xs, ys,
+                                                   # V dummy args V
+                                                   'cont', subsubdata,
+                                                   None, None,
+                                                   True, None,
+                                                   'red', None)
+                                                   # ^ dummy args ^
+                swarm_xy = sp.beeswarm(orig_xy=orig_xy, d=d_swarm)
+                # store points
+                points_dict[cont][NDC_val][when] = swarm_xy
+                # set plotting params based on whether plotting current or potential
+                if when == 'potential':
+                    facecolors = 'none'
+                    edgecolors=[cont_palette[i] for c in subsubdata['cont']]
+                    s=subsubdata['sizes']
+                    alpha=1
+                    linewidth=1.5
+                    # jitter the bubbles more than the points
+                    # (to make the piles 'steam' more)
+                    jitter = np.random.normal(loc=0,
+                                              scale=extra_jitter,
+                                              size=swarm_xy.shape[0])
+                    jitter = np.clip(jitter,
+                                     a_min=-1*max_extra_jitter,
+                                     a_max=max_extra_jitter)
+                    swarm_xy[:,0] = swarm_xy[:,0] + jitter
+                else:
+                    facecolors=[cont_palette[i] for c in subsubdata['cont']]
+                    edgecolors='none'
+                    s= marksize
+                    alpha=1
+                    linewidth=None
+                # set marker types
+                if NDC_val == 'no':
+                    if when == 'current':
+                        marker='x'
+                    else:
+                        marker='X'
+                elif NDC_val == 'yes':
+                    marker='o'
+                # plot the points
+                ax.scatter(x=swarm_xy[:,0],
+                           y=swarm_xy[:,1],
+                           edgecolors=edgecolors,
+                           facecolors=facecolors,
+                           linewidth=linewidth,
+                           s=s,
+                           alpha=alpha,
+                           marker=marker,
+                          )
+                # add country names, if in nth quantile for total mit potential
+                top_countries = set(subsubdata.NAME_EN).intersection(q_countries)
+                if when == 'potential' and len(top_countries) > 0:
+                    for country in top_countries:
+                        row_i = [i for i in range(len(subsubdata)) if
+                                 subsubdata.iloc[i]['NAME_EN'] == country]
+                        assert len(row_i) == 1
+                        country_x, country_y = swarm_xy[row_i[0], :]
+                        # manually shorten some country names
+                        if country == 'United States of America':
+                            country = 'USA'
+                        if country == "People's Republic of China":
+                            country = 'China'
+                        ax.text(country_x+0.005, country_y+0.125, country,
+                                color='black', alpha=0.8, size=9, rotation=45)
+# axis formatting
+ax.set_xlabel('continent', fontdict={'fontsize': 14})
+ax.set_ylabel(('area-weighted density of woody C\nin crop and grazing'
+               'lands ($Mg\ C\ ha^{-1}$)'),
+              fontdict={'fontsize': 14})
+ax.set_xticks(xtick_locs, xtick_labs)
+ax.set_xlim(xtick_locs[0]-0.5, xtick_locs[-1]+0.5)
+# add solid and dotted lines and solid boxes to label NDC/non-NDC nations
+patches = []
+for loc in xtick_locs:
+    ax.axvline(loc, *ax.get_ylim(),
+               linestyle=':', color='black')
+    ax.axvline(loc+0.5, *ax.get_ylim(),
+               linestyle='-', color='black', linewidth=2)
+    patch = Rectangle(xy=(loc-0.5, ax.get_ylim()[0]),
+                      width=0.5,
+                      height=np.diff(ax.get_ylim()),
+                     )
+    patches.append(patch)
+p = PatchCollection(patches, alpha=0.1, color='black', zorder=0)
+ax.add_collection(p)
+ax.tick_params(labelsize=12)
+# custom legend at the side
+col_data = data_for_figs['agrofor_feascum']
+vals = np.linspace(np.quantile(np.sqrt(col_data), 0.05),
+                   np.quantile(np.sqrt(col_data), 0.95), 5)**2
+vals = [round(val, -(len(str(int(val)))-2)) for val in vals]
+sizes = scale_markersizes(vals)
+legend_elements = []
+for val, size in zip(vals, sizes):
+    label = '$%s.%s\ ×\ 10^{%i}$' % (str(val)[0],
+                                     str(val)[1],
+                                     len(str(val))-1)
+    # add circle and X markers
+    element_x = Line2D([0], [0],
+                     marker='X',
+                     color='none',
+                     markeredgecolor='black',
+                     label='',
+                     markerfacecolor='none',
+                     markersize=np.sqrt(size))
+    element_o = Line2D([0], [0],
+                     marker='o',
+                     color='none',
+                     markeredgecolor='black',
+                     label=label,
+                     markerfacecolor='none',
+                     markersize=np.sqrt(size))
+    legend_elements.append(element_x)
+    legend_elements.append(element_o)
+    # add spacing element
+    if val < vals[-1]:
+        element_blank = Line2D([0], [0],
+                               marker='.',
+                               color='none',
+                               markeredgecolor='none',
+                               label='',
+                               alpha=0,
+                               markerfacecolor='none',
+                               markersize=np.sqrt(size))
+        legend_elements.append(element_blank)
+lgd_title = 'total mitigation\npotential by\n2050 ($Mg\ C$)'
+lgd = ax.legend(handles=legend_elements,
+                bbox_to_anchor=(1.01, 0.9),
+                prop={'size': 12},
+                title=lgd_title,
+                title_fontsize=14,
+                fancybox=True,
+               )
+fig_1.subplots_adjust(left=0.07,
+                      bottom=0.09,
+                      right=0.86,
+                      top=0.96,
+                     )
+
+if save_it:
+    fig_1.savefig('current_and_potential_boiling_pots.png', dpi=700)
+
+fig_1.show()
+
+# t-test of significant diff between NDC and non-NDC groups
+res = ttest_ind(data_for_figs[data_for_figs.NDC_num==1]['wt_avg_density'],
+                data_for_figs[data_for_figs.NDC_num==0]['wt_avg_density'],
+               nan_policy='omit')
+print(('\n\nt-test of sig. diff. between woody C ag-land density in NDC and '
+       'non-NDC countries:\n\tt-stat: %0.3f\n\tp-value: '
+       '%0.5f') % (res.statistic, res.pvalue))
 
 
 
-#### MAP PCT BELOW POTENTIAL STOCKING
+############################################
+# PLOT 2: current woody C density vs HDI/GDP
+############################################
 
-# recast potential as % below potential,
-# and cap at 0% below potential
-# (NOTE: combines Roe feasible potential numbers and Chapman current numbers)
-# (the countries that have a potential number lower than
-#  the current number are just the really high-density ones in Africa
-#  and small Caribbean Islands (as well as Kosovo, Turkmenistan, and Suriname)
-#  so that makes sense because all the data were used together to set 'potential'
-data_for_figs['abs_below'] = np.clip(((data_for_figs['agrofor_feascum'] -
-                                     data_for_figs['total_biomass']/2)),
-                                       a_min = 0, a_max = None)
-#data_for_figs['abs_below'] = np.clip(((data_for_figs['total_potential'] -
-                                     #data_for_figs['total_biomass'])),
-                                       #a_min = 0, a_max = None)
-#data_for_figs['pct_below'] = np.clip(((data_for_figs['total_potential'] -
-#                                     data_for_figs['total_biomass'])/(
-                #data_for_figs['total_potential']))*100, a_min = 0, a_max = None)
+#is current woody C density roughly correlated with GDP? HDI?
+# NOTE: GDP data from: https://data.worldbank.org/indicator/NY.GDP.MKTP.CD
+# NOTE: HDI data from: https://hdr.undp.org/en/data
+
+
+def scale_var(var):
+    return (var - np.min(var))/(np.max(var) - np.min(var))
+
+
 data_for_figs['pct_below'] = np.clip(((data_for_figs['agrofor_feascum'] -
                                      data_for_figs['total_biomass']/2)/(
                 data_for_figs['agrofor_feascum']))*100, a_min = 0, a_max = None)
-
-max_cbar_val = 100
-min_cbar_val = 0
-
-# plot NDC and non-NDC countries' woody C density separately
-cbar_title_lookup = {0: 'AF not in NDC', 1: 'AF in NDC'}
-
-
-fig3 = plt.figure()
-fig3.suptitle('current percent below feasible ag woody C density')
-
-# plot it
-ax = fig3.add_subplot(111)
-divider = make_axes_locatable(ax)
-#cax = divider.append_axes("bottom", size="5%", pad=0.1)
-tcax = divider.append_axes("top", size="5%", pad=0.1)
-bcax = divider.append_axes("bottom", size="5%", pad=0.1)
-cax_dict = {0: bcax, 1:tcax}
-
-
-for NDC_status in range(2):
-    subdf = data_for_figs[data_for_figs.NDC_num == NDC_status]
-    if NDC_status == 1:
-        edgecolor = 'black'
-        linewidth = 0.75
-    else:
-        edgecolor='black'
-        linewidth=0.75
-    map = subdf.to_crs(8857).plot('pct_below',
-                     ax=ax,
-                     vmin=0,
-                     vmax=max_cbar_val,
-                     cmap=cmaps[NDC_status],
-                     edgecolor=edgecolor,
-                     linewidth=linewidth,
-                     legend=True,
-                     legend_kwds={'label': 'percent below potential',
-                                  'orientation': "horizontal"},
-                     cax=cax_dict[NDC_status])
-
-# TODO: FIGURE OUT WHY POTENTIAL_CROP OR POTENTIAL_PASTURE IS NAN
-#       FOR SOME COUNTRIES (it makes total_potential nan too);
-#       I could sum the potential value that she does have with the current
-#       for the other value to get a low estimate of total potential,
-#       but that's probably more misleading than just omitting those countries,
-#       as I do now...
-# outline countries with missing potential values
-data_for_figs[pd.isnull(data_for_figs.agrofor_feascum)].to_crs(8857).plot(
-                                                    edgecolor='black',
-                                                    facecolor='white',
-                                                    linewidth=0.25,
-                                                    ax=ax)
-
-# outline missing country boundaries
-potential[pd.isnull(potential.NDC)].to_crs(8857).plot(edgecolor='black',
-                                                      facecolor='white',
-                                                      linewidth=0.25,
-                                                      ax=ax)
-format_map_axes(ax, tcax, bcax, 'pct_below', max_tickval=100)
-fig3.show()
-
-
-if save_it:
-    fig3.savefig('woody_C_pct_below.png',
-                  dpi=dpi, orientation='landscape')
-
-
-
-
-
-# SCATTER TOTAL POTENTIAL VS PCT BELOW
-
-# get count of points in each country poly
-dfsjoin = gpd.sjoin(data_for_figs, af_locs)
-dfsjoin['count'] = 1
-counts = dfsjoin.groupby(['NAME_EN']).sum()['count']
-
-# add a point-density col in data_for_figs
-data_for_figs['count'] = 0
-for cntry in counts.index:
-    data_for_figs.loc[data_for_figs['NAME_EN'] == cntry, 'count'] = counts[cntry]
-data_for_figs['pt_density'] = data_for_figs['count']/data_for_figs['total_area']
-
-# determine breakpoints between low, mod, and high avg_density
-lo, md, hi = np.nanpercentile(data_for_figs['wt_avg_density'], [10, 50, 90])
-
-colors = {'AF not in NDC':mpl.colors.hex2color('#1f6e00'),
-          'AF in NDC': mpl.colors.hex2color('#5e534b')
-         }
-
-# rank the pt counts
-data_for_figs['count_rank'] = data_for_figs['count'].rank(method='dense')
-fig5, ax = plt.subplots(1,1)
-sns.scatterplot(x=data_for_figs['pct_below'],
-                # TODO: DECIDE IF I'M CORRECT THAT I NEED TO /2 HERE TO GET Mg C
-                y=data_for_figs['agrofor_feascum']/2,
-                style=['o' if c>0 else 'x' for c in data_for_figs['count']],
-                hue=data_for_figs['NDC_num'],
-                palette=['#5e534b', '#1f6e00'],
-                size=data_for_figs['count_rank'],
-                sizes=(50, 300),
-                alpha=0.4,
-                ax=ax)
-legend_elements = [Line2D([0], [0],
-                          marker='o',
-                          color=c,
-                          label=l,
-                          linewidth=0,
-                          markersize=6,
-                          alpha=0.4) for l, c in colors.items()]
-legend_elements = legend_elements + [Line2D([0], [0], color='black', label='')]
-legend_elements = legend_elements + [Line2D([0], [0],
-                                            marker=m,
-                                            color='black',
-                                            alpha=0.5,
-                                            label=l,
-                                            linewidth=0,
-                                            markersize=6,
-                                           ) for l, m in [('no known studies', 'x'),
-                                                    ('known studies', 'o')]]
-legend_elements = legend_elements + [Line2D([0], [0], color='black', label='')]
-legend_elements = legend_elements + [Line2D([0], [0],
-                                            marker='o',
-                                            color='black',
-                                            alpha=0.5,
-                                            label=l,
-                                            linewidth=0,
-                                            markersize=s
-                                           ) for l, s in [('few studies', 6),
-                                                        ('many studies', 15)]]
-ax.legend(handles=legend_elements, loc='upper left')
-qtile = np.nanpercentile(data_for_figs['agrofor_feascum'], 95)
-for i, row in data_for_figs.iterrows():
-    if row['agrofor_feascum']>qtile:
-        ax.text(row['pct_below'],
-                (row['agrofor_feascum']/2) + 0.005e8,
-                 row['NAME_EN'],
-                 fontdict={'fontsize':8},
-                )
-ax.set_xlabel('% below total potential woody C',
-              fontdict={'fontsize': 20})
-ax.set_ylabel('total potential woody C (Mg)',
-              fontdict={'fontsize': 20})
-fig5.show()
-
-
-
-############################
-# NDC contributions analysis
-
-# prep NDC contributions data
-df_hist_tia = ndc_contrib.loc[:, ['geo', 'pct_tia', 'pct_tia_ce']]
-df_hist_tia.columns = ['country', 'max_potential', 'cost_effective']
-df_hist_tia = pd.melt(df_hist_tia, id_vars=['country'],
-                      value_vars=['max_potential', 'cost_effective'])
-df_hist_tia['NCS'] = 'agroforestry'
-df_hist_refor = ndc_contrib.loc[:, ['geo', 'pct_refor', 'pct_refor_ce']]
-df_hist_refor.columns = ['country', 'max_potential', 'cost_effective']
-df_hist_refor = pd.melt(df_hist_refor, id_vars=['country'],
-                        value_vars=['max_potential', 'cost_effective'])
-df_hist_refor['NCS'] = 'reforestation'
-df_hist = pd.concat((df_hist_tia, df_hist_refor), axis=0)
-df_hist.columns = ['country', 'estimate_type', 'percent_NDC_target', 'NCS']
-
-
-# merge onto countries
-ndc_contrib_map = pd.merge(countries, ndc_contrib,
-                           left_on='iso_a3', right_on='iso3', how='outer')
-ndc_contrib_map = pd.merge(ndc_contrib_map, data_for_figs.loc[:, ['ISO_A3', 'NDC_num']],
-         left_on='iso_a3', right_on='ISO_A3', how='outer')
-
-fig_map, ax = plt.subplots(1, 1)
-fig_map.suptitle('percent of NDC targets achievable by agroforestry (Baruch-Mordo et al. 2018)')
-divider = make_axes_locatable(ax)
-tcax = divider.append_axes("top", size="5%", pad=0.1)
-bcax = divider.append_axes("bottom", size="5%", pad=0.1)
-cax_dict = {0: bcax, 1:tcax}
-
-countries.to_crs(8857).plot(facecolor='none',
-           edgecolor='black',
-           linewidth=0.25,
-           ax=ax)
-max_pct=30
-for NDC_status in range(2):
-    subdf = ndc_contrib_map[ndc_contrib_map.NDC_num == NDC_status]
-    map = subdf.to_crs(8857).plot('pct_tia_ce',
-                     ax=ax,
-                     vmin=0,
-                     vmax=max_pct,
-                     cmap=cmaps[NDC_status],
-                     edgecolor=edgecolor,
-                     linewidth=linewidth,
-                     legend=True,
-                     legend_kwds={'label': 'percent NDC target achievable',
-                                  'orientation': "horizontal"},
-                     cax=cax_dict[NDC_status])
-format_map_axes(ax, tcax, bcax, 'pct_NDC', max_tickval=max_pct)
-ax.set_title('cost-effective mitigation')
-# fix cbar ticklabels
-fig_map.show()
-
-if save_it:
-    fig_map.savefig('NDC_contributions_map.png',
-                    dpi=dpi, orientation='portrait')
-
-
-# PERCENT OF NDC VS TOTAL NDC SIZE
-# rank the pt counts
-fig6, ax = plt.subplots(1,1)
-ndc_contrib_for_scat = pd.merge(ndc_contrib, data_for_figs,
-                                left_on='iso3', right_on='ISO_A3',
-                                how='outer')
-sns.scatterplot(x='pct_tia_ce',
-                y='targ',
-                #style=['o' if c>0 else 'x' for c in data_for_figs['count']],
-                hue='NDC_num',
-                palette=['#5e534b', '#1f6e00'],
-                size='red_pct',
-                sizes=(50, 300),
-                alpha=0.4,
-                data=ndc_contrib_for_scat,
-                ax=ax)
-legend_elements = [Line2D([0], [0],
-                          marker='o',
-                          color=c,
-                          label=l,
-                          linewidth=0,
-                          markersize=6,
-                          alpha=0.4) for l, c in colors.items()]
-legend_elements = legend_elements + [Line2D([0], [0], color='black', label='')]
-legend_elements = legend_elements + [Line2D([0], [0],
-                                            marker='o',
-                                            color='black',
-                                            alpha=0.5,
-                                            label=l,
-                                            linewidth=0,
-                                            markersize=s
-                                           ) for l, s in [('NDC target low', 6),
-                                                        ('NDC target ambitious', 15)]]
-ax.legend(handles=legend_elements, loc='upper right')
-qtile = np.nanpercentile(ndc_contrib_for_scat['targ'], 95)
-for i, row in ndc_contrib_for_scat.iterrows():
-    if row['targ']>qtile:
-        ax.text(row['pct_tia_ce'],
-                row['targ'],
-                row['NAME_EN'],
-                fontdict={'fontsize': 10},
-               )
-qtile = np.nanpercentile(ndc_contrib_for_scat['pct_tia_ce'], 95)
-for i, row in ndc_contrib_for_scat.iterrows():
-    if row['pct_tia_ce']>qtile:
-        # NOTE: adjusting Chad for readability
-        ax.text(row['pct_tia_ce']-(1*(row['NAME_EN']=='Chad')),
-                row['targ'],
-                 row['NAME_EN'],
-                fontdict={'rotation': '45',
-                          'fontsize': 10},
-               )
-ax.set_xlabel('contribution of cost-effective\nAF to NDC target (%)',
-              fontdict={'fontsize': 20})
-ax.set_ylabel('NDC target ($Tg\ CO_2e\ yr^{-1}$)',
-              fontdict={'fontsize': 20})
-fig6.show()
-
-
-#is current woody C density roughly correlated with GDP?
-# NOTE: data from: https://data.worldbank.org/indicator/NY.GDP.MKTP.CD
-def scale_var(var):
-    return (var - np.min(var))/(np.max(var) - np.min(var))
-gdp = pd.read_csv('./API_NY.GDP.MKTP.CD_DS2_en_csv_v2_3731268.csv', skiprows=4)
-gdp_pcap = pd.read_csv('./API_NY.GDP.PCAP.CD_DS2_en_csv_v2_3731360.csv', skiprows=4)
-data_w_gdp = pd.merge(data_for_figs, gdp_pcap.loc[:, ['Country Code', '2000']],
+#gdp = pd.read_csv('./API_NY.GDP.MKTP.CD_DS2_en_csv_v2_3731268.csv', skiprows=4)
+#gdp_pcap = pd.read_csv('./API_NY.GDP.PCAP.CD_DS2_en_csv_v2_3731360.csv', skiprows=4)
+hdi = pd.read_csv('Human Development Index (HDI)_w_ISO3_2000.csv')
+data_w_hdi = pd.merge(data_for_figs, hdi.loc[:, ['Country Code', '2000']],
                       left_on='ISO_A3', right_on='Country Code')
-fig, ax = plt.subplots(1,1)
-data_w_gdp['log_gdp'] = np.log(data_w_gdp['2000'])
-data_w_gdp['log_dens'] = np.log(data_w_gdp['wt_avg_density'])
-sizes = 50 + scale_var(data_w_gdp['pct_below'])
-sns.scatterplot(x='log_gdp', y='log_dens', hue='cont', data=data_w_gdp, ax=ax,
-                size='total_potential', sizes=(50, 250),
+data_w_hdi['hdi'] = data_w_hdi['2000']
+fig_2 = plt.figure(figsize=(10,8.5))
+ax = fig_2.add_subplot(111)
+#data_w_gdp['log_gdp'] = np.log(data_w_gdp['2000'])
+data_w_hdi['log_dens'] = np.log(data_w_hdi['wt_avg_density'])
+sizes = scale_markersizes(data_w_hdi['agrofor_feascum'],
+                          min_marksize=min_scattersize,
+                          max_marksize=max_scattersize,
+                          transform='sqrt')
+data_w_hdi['sizes'] = sizes
+sns.scatterplot(x='hdi', y='log_dens', hue='cont', data=data_w_hdi, ax=ax,
+                size='sizes', sizes=(min_scattersize, max_scattersize),
                 style='NDC', style_order=('yes', 'no'),
+                palette=cont_palette[:len(data_for_figs['cont'].unique())],
                 edgecolor='black', linewidth=0.5, alpha=0.8, legend='brief')
-sns.regplot(x='log_gdp', y='log_dens', data=data_w_gdp, ax=ax, scatter=False)
-data_for_test = data_w_gdp.loc[:, ['log_gdp', 'log_dens']].dropna(how='any')
-r, p = stats.pearsonr(data_for_test['log_gdp'], data_for_test['log_dens'])
-ax.text(4.9, -5.8, '$R^2=%0.2f$' % r, color='red', fontstyle='italic')
-ax.text(4.9, -6.1, '$p=%0.4f$' % p, color='red', fontstyle='italic')
-for i, row in data_w_gdp.iterrows():
-    if row['log_dens'] < np.nanpercentile(data_w_gdp['log_dens'], 10):
-        ax.text(row['log_gdp'], row['log_dens'], row['NAME_EN'], color='gray')
-    if row['total_potential'] > np.nanpercentile(data_w_gdp['total_potential'], 90):
-        ax.text(row['log_gdp'], row['log_dens'], row['NAME_EN'], color='black')
-ax.set_xlabel('log GDP per capita (yr. 2000)', fontdict={'fontsize': 18})
-ax.set_ylabel('log average ag. woody C density (yr. 2000)', fontdict={'fontsize': 18})
-ax.set_xlim(4.823, 11.5)
-plt.legend(loc='upper right')
-fig.show()
+sns.regplot(x='hdi', y='log_dens', data=data_w_hdi, ax=ax, scatter=False)
+data_for_test = data_w_hdi.loc[:, ['hdi', 'log_dens']].dropna(how='any')
+r, p = stats.pearsonr(data_for_test['hdi'], data_for_test['log_dens'])
+ax.text(0.26, -5.9, '$R^2=%0.2f$' % r**2, color='red', fontstyle='italic')
+ax.text(0.26, -6.1, '$p=%0.4f$' % p, color='red', fontstyle='italic')
+for i, row in data_w_hdi.iterrows():
+    country = row['NAME_EN']
+    # manually shorten some countries
+    if country == 'United States of America':
+        country = 'USA'
+    elif country == "People's Republic of China":
+        country = 'China'
+    if (row['log_dens'] < np.nanpercentile(data_w_hdi['log_dens'], 10) and
+        pd.notnull(row['agrofor_feascum'])):
+        ax.text(row['hdi'], row['log_dens'], country,
+                color='gray', rotation=20, size=9)
+    if row['agrofor_feascum'] > np.nanpercentile(data_w_hdi['agrofor_feascum'],
+                                                 90):
+        ax.text(row['hdi'], row['log_dens'], country,
+                color='black', rotation=20, size=9)
+ax.set_xlabel('human development index (HDI; yr. 2000)',
+              fontdict={'fontsize': 14})
+ax.set_ylabel('log average ag. woody C density (yr. 2000)',
+              fontdict={'fontsize': 14})
+ax.set_xlim(0.25, 0.96)
+ax.set_ylim(-6.2, 3)
+ax.tick_params(labelsize=12)
+plt.legend(bbox_to_anchor=(1.01, 0.9))
+fig_2.subplots_adjust(left=0.08,
+                      bottom=0.08,
+                      right=0.81,
+                      top=0.98,
+                     )
 
-# Damien's suggestion
-fig, ax = plt.subplots(1,1)
-#sns.scatterplot(x=np.log(ndc_contrib_for_scat['wt_avg_density']), y='count',
-sns.scatterplot(x='wt_avg_density', y='count',
-                hue='cont',
-                size='pct_tia_ce', data=ndc_contrib_for_scat,
-                sizes=(30, 300))
-#sns.regplot(x='wt_avg_density', y='count', order=1,
-#                data=ndc_contrib_for_scat, scatter=False)
-for i, row in ndc_contrib_for_scat.iterrows():
-    if row['count'] > np.nanpercentile(ndc_contrib_for_scat['count'], 90):
-        ax.text(row['wt_avg_density'], row['count'], row['NAME_EN'], color='gray')
-    if row['pct_tia_ce'] > np.nanpercentile(ndc_contrib_for_scat['pct_tia_ce'], 90):
-        ax.text(row['wt_avg_density'], row['count'], row['NAME_EN'], color='black')
-
-
+fig_2.show()
+if save_it:
+    fig_2.savefig('woody_C_vs_HDI_scatter.png', dpi=700)

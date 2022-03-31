@@ -387,6 +387,7 @@ soc_comp = all[all['var'] == 'soc']
 soc_comp['card_stock_log'] = np.log10(soc_comp['stock'])
 
 # make the figure
+plt.close('all')
 fig = plt.figure(figsize=(5.5, 8))
 # NOTE: add top scatter axes, empty axes for spacing, then all KDE axes pairs
 gs = fig.add_gridspec(2+len(pracs), 1,
@@ -452,8 +453,13 @@ ax_scat.set_xticks(x_tick_locs, x_tick_labs)
 ax_scat.set_yticks(tick_locs, tick_labs)
 ax_scat.set_xlim(x_ax_lims)
 ax_scat.set_ylim(ax_lims)
+# get practice medians
+agb_meds = agb_comp.groupby('practice').median().loc[:,['card_stock_log']]
+#agb_meds_rs = agb_comp.groupby('practice').median().loc[:,['whrc_stock_false0_log']]
+soc_meds = soc_comp.groupby('practice').median().loc[:,['card_stock_log']]
+sorted_pracs = agb_meds.sort_values('card_stock_log').index.values
 # plot each of the AGB and SOC KDEs
-for prac_i, prac in enumerate(pracs):
+for prac_i, prac in enumerate(sorted_pracs):
     #ax_agb = fig.add_subplot(gs[2+(prac_i*2),0])
     #ax_soc = fig.add_subplot(gs[3+(prac_i*2),0])
     ax_kde = fig.add_subplot(gs[2+prac_i, 0])
@@ -479,6 +485,14 @@ for prac_i, prac in enumerate(pracs):
     for n, violin in enumerate(ax_kde.collections):
             violin.set_alpha(0.75 - (n*0.4))
     ax_kde.legend().remove()
+    # add medians
+    agb_med = agb_meds.loc[prac, 'card_stock_log']
+    #agb_med_rs = agb_meds_rs.loc[prac, 'whrc_stock_false0_log']
+    soc_med = soc_meds.loc[prac, 'card_stock_log']
+    ax_kde.plot([agb_med]*2, [0, -0.1], color='black', linewidth=1.5, alpha=0.75)
+    #ax_kde.plot([agb_med_rs]*2, [0, -0.1], '--', color='black', linewidth=1.5, alpha=0.75)
+    ax_kde.plot([soc_med]*2, [0, 0.1], color='black', linewidth=1.5, alpha=0.35)
+    # add left arrow
     """
     sns.kdeplot('card_stock_log',
                 hue='practice',
@@ -511,7 +525,7 @@ for prac_i, prac in enumerate(pracs):
     # add horiz lines for each plot
     ax_kde.axhline(y=0, lw=2, xmin=x_ax_lims[0], xmax=x_ax_lims[1],
                color=prac_colors[prac], clip_on=True, alpha=0.4)
-    #ax.set_ylim((0, 0.8))
+    ax_kde.set_ylim((0.8, -0.8)) #NOTE: lims inverted bc violinplot inverts y ax
     ax_kde.set_xlim(x_ax_lims)
     ax_kde.set_xticks(())
     ax_kde.set_yticks(())
@@ -529,6 +543,7 @@ for prac_i, prac in enumerate(pracs):
 fig.subplots_adjust(left=0.15, right=0.97, bottom=0, top=0.93,
                     wspace=0, hspace=-0.35)
 fig.savefig('C_density_pub_rs_comp_plot.png', dpi=700)
+fig.show()
 
 
 

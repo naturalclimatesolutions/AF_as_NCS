@@ -3,7 +3,10 @@
 *.pdf
 *.jpg
 *.csv
+*.tif
+*.zip
 *.xlsx
+__pycache__
 citation_trends/AF*.txt
 citation_trends/NCS*.txt
 mapping/rosenstock_et_al_2019_data/*.xlsx
