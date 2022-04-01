@@ -20,17 +20,14 @@ import warnings
 
 # TODO:
 
-    # fix Chapman data export
+    # clean up Chapman map and format and save 
 
-    # clean up Chapman map and format and save  (include deleting unneeded code
-    # there and at bottom)
+    # tie up boxplots
+        # nix fliers
+        # format axes, labels, etc
 
-    # finalize next draft of scatterplot at bottom
-        # need to plot or at least test separate slopes for each region
-        # (folding Oceania into Asia I guess?)?
-
-    # combine and share back with group for comments (start wrapping up!)
-
+    # need to plot or at least test separate slopes for each region
+    # (folding Oceania into Asia I guess?)?
 
 
 
@@ -40,7 +37,6 @@ map_minx = -13700000
 map_maxx = 16500000
 map_miny = -7000000
 map_maxy = 8392644
-map_pal = palettable.cmocean.sequential.Speed_20.mpl_colormap
 suptitle_fontsize = 50
 title_fontsize = 40
 contour_axislab_fontsize = 10
@@ -218,14 +214,10 @@ continents.index = ['Africa', 'Antarctica', 'Asia',
                     'Europe', 'N. America', 'Oceania',
                     'C. & S. America\n& Caribbean']
 # set continents' color palette
-#cont_palette = sns.color_palette('colorblind')
-cont_palette = ['#E94A35', # cinnabar
-                '#EC1B1B', # red
-                '#FF66D1', # pink
-                '#EC71FF', # light purple
-                '#5D40EC', # blue
-                '#9636FC', # purple
-               ]
+cont_palette = [sns.color_palette('bright')[i] for i in [4,8,6,9,3,1]]
+# make the pink less "AAARGHH!!!" and the yellow less "BAAART!!!"
+cont_palette[1] = tuple(np.array((250, 250, 75))/255)
+cont_palette[2] = tuple(np.array((255, 150, 248))/255)
 # set color for each row
 cont_colors = []
 cont_ct = 0
@@ -243,7 +235,8 @@ chap_rast = rxr.open_rasterio('./chapman_all_Mg_C_ha_ca2km_EPSG_8857.tif',
                               cache=False,
                               chunks=(5, 5),
                              )
-chap_rast = chap_rast.rio.clip_box(map_minx, map_miny, map_maxx, map_maxy)
+#chap_rast = chap_rast.rio.clip_box(map_minx, map_miny, map_maxx, map_maxy)
+
 
 # load the Chapman SI datasets, then merge onto countries to make spatial
 # (NOTE: I found no good metadata doc for her SI data,
@@ -446,6 +439,8 @@ def format_map_axes(ax, bcax, max_tickval=None):
     """
     Function to custom format map images
     """
+    # set 'ocean' color
+    ax.set_facecolor('#ebf5f4')
     # bound the longitude (cuts off Hawaii, but no data there, and otherwise
     # makes plot nicer; also cuts out Antarctica)
     ax.set_xlim((map_minx, map_maxx))
@@ -477,31 +472,41 @@ def format_map_axes(ax, bcax, max_tickval=None):
     bcax.set_xticks(ticklocs, new_ticklabs)
 
 
-map_pal.set_bad('white')
-map_pal.set_under('white')
+map_pal = palettable.cmocean.sequential.Algae_3.mpl_colormap
+soil_color = palettable.cmocean.sequential.Speed_20.mpl_colormap(2)
+map_pal.set_under(soil_color)
+map_pal.set_bad('#ffffff00')
 fig_0 = plt.figure(figsize=(12, 9))
 ax = fig_0.add_subplot(111)
 # axes at bottom for colorbar
 divider = make_axes_locatable(ax)
 bcax = divider.append_axes("bottom", size="7%", pad=0.1)
+# plot land underneath
+countries.to_crs(8857).plot(color='#f7f7f7',
+                            linewidth=0.25,
+                            edgecolor='none',
+                            ax=ax,
+                            zorder=0,
+                            )
 # plot Chapman data
 chap_rast.squeeze().plot.imshow(cmap=map_pal,
-                                vmin=0,
-                                vmax=60,
+                                vmin=5,
+                                vmax=40,
                                 add_labels=False,
                                 add_colorbar=True,
                                 cbar_ax=bcax,
                                 cbar_kwargs={'orientation': 'horizontal'},
                                 ax=ax,
+                                extend='max',
+                                zorder=1,
                                )
-
 # plot countries and continents
 countries.to_crs(8857).plot(color='none',
                             linewidth=0.25,
-                            edgecolor='black',
+                            edgecolor='white',
                             ax=ax,
+                            zorder=2,
                             )
-
 for cont in continents.index.unique():
     if cont not in ['Antarctica', 'Seven Seas']:
         data = continents.reset_index()[continents.reset_index()['index'] == cont]
@@ -509,22 +514,39 @@ for cont in continents.index.unique():
                                linewidth=1.5-(1.25*(cont == 'Antarctica')),
                                edgecolor=data['color'].values[0],
                                ax=ax,
+                               zorder=2,
                                )
 
 # add locations
 ax.scatter(af_locs.to_crs(8857).centroid.x,
            af_locs.to_crs(8857).centroid.y,
            c='black',
-           s=7,
+           s=35,
+           marker='X',
            edgecolor='white',
-           linewidth=0.1,
+           linewidth=0.6,
            alpha=1,
+           zorder=3,
           )
 
+# fix the colorbar and set ticks and labels
+patches_0to5 = [Rectangle(xy=(0, 0), width=5, height=1)]
+p = PatchCollection(patches_0to5, alpha=1, color=soil_color, zorder=0)
+bcax.add_collection(p)
+bcax.set_xlim((0, bcax.get_xlim()[1]))
+bcax.set_ylim((0, 1))
+bcax.set_xticks([0,5,10,20,30,40], ['0', '5', '10', '20', '30', '40+'])
+bcax.axvline(x=5, ymin=0, ymax=1, linewidth=2, color='black')
 # call map-formatting fn
 format_map_axes(ax, bcax)
-
+# asjust spacing
+fig_0.subplots_adjust(left=0,
+                      bottom=0.075,
+                      right=1,
+                      top=1,
+                     )
 fig_0.show()
+
 if save_it:
     fig_0.savefig('ag_woody_C_and_known_AF_locs.png',
                  dpi=dpi, orientation='landscape')
@@ -536,36 +558,6 @@ if save_it:
 #############################################################
 
 
-def scale_markersizes(vals, min_marksize=20, max_marksize=250, transform=None):
-    if transform == 'log':
-        vals = np.log10(vals)
-    # NOTE: perhaps makes most sense to scale with sqrt, since mpl expresses
-    #       scatterploint marker size in pt^^2, i.e., sqrt of point area;
-    #       however I don't really know anything about the science around
-    #       perception of size in plots...
-    elif transform == 'sqrt':
-        vals = np.sqrt(vals)
-    vals_0to1 = (vals - np.min(vals))/(np.max(vals) - np.min(vals))
-    scaled_vals = (vals_0to1 * (max_marksize - min_marksize)) + min_marksize
-    return scaled_vals
-
-
-# LOCAL PLOTTING PARAMS:
-# make jitters repeatable
-seed_num = 252
-np.random.seed(seed_num)
-# diameter for finding potentially overlapping points, when making beeswarm
-d_swarm = 0.05
-# additional jitter to add to potential values, to make the pots 'boil' more
-extra_jitter = 0.05
-# upper limit on jitter to add
-max_extra_jitter = 0.2
-# min and max markersizes for size-rescaling
-marksize = 15
-min_scattersize = 25
-max_scattersize = 500
-# nth quantile for country name plotting
-q = 0.9
 data_for_figs_long = data_for_figs.melt(id_vars=['NDC', 'cont',
                                                  'agrofor_feascum', 'NAME_EN'],
                                         value_vars=['wt_avg_density',
@@ -577,15 +569,157 @@ when_vals = {'wt_avg_density': 'current',
              'agrofor_feasden_Mgha': 'potential',
             }
 data_for_figs_long['when'] = [when_vals[val] for val in data_for_figs_long['when']]
-data_for_figs_long['sizes'] = scale_markersizes(
-                                        data_for_figs_long['agrofor_feascum'],
-                                        min_marksize=min_scattersize,
-                                        max_marksize=max_scattersize,
-                                        transform='sqrt')
 # get names of countries in nth quantile for total feasible mitigation by 2050
-q_val = np.quantile(data_for_figs['agrofor_feascum'], q)
-q_countries = set(data_for_figs[data_for_figs[
-                                        'agrofor_feascum'] >= q_val].NAME_EN)
+
+
+fig_1 = plt.figure(figsize=(14,8))
+ax = fig_1.add_subplot(1,1,1)
+cont_tot_width = 1.4
+space_curr_potent = 0.05
+space_NDC_no_yes = 0.1
+space_cont = 0.2
+box_width = (cont_tot_width -
+             space_cont -
+             space_NDC_no_yes -
+             (2*space_curr_potent)) / 4
+assert np.allclose(cont_tot_width,
+                    ((box_width*4) +
+                     (space_curr_potent*2) +
+                     space_NDC_no_yes +
+                     space_cont))
+positions_per_cont = [box_width/2 + space_cont/2]
+positions_per_cont.append(positions_per_cont[0] + space_curr_potent + box_width)
+positions_per_cont.append(positions_per_cont[1] + space_NDC_no_yes + box_width)
+positions_per_cont.append(positions_per_cont[2] + space_curr_potent + box_width)
+positions = []
+box_vecs = []
+colors = []
+alphas = []
+widths = [box_width/2] * (4 * len(conts))
+no_NDC_box_ll_xs = [0]
+ct = 0
+conts = data_for_figs_long.cont.unique()
+for i, cont in enumerate(conts):
+    data = data_for_figs_long[data_for_figs_long['cont'] == cont]
+    positions.extend([p + (i*cont_tot_width) for p in positions_per_cont])
+    if i < (len(conts)-1):
+        no_NDC_box_ll_xs.append(no_NDC_box_ll_xs[i] + cont_tot_width)
+    for j, NDC_val in enumerate(['no', 'yes']):
+        subdata = data[data['NDC'] == NDC_val]
+        for k, when in enumerate(data_for_figs_long['when'].unique()):
+            subsubdata = subdata[subdata['when'] == when]
+            box_vec = subsubdata['density'].values
+            box_vec = box_vec[pd.notnull(box_vec)]
+            box_vecs.append(box_vec)
+            colors.append(continents.loc[cont]['color'])
+            alphas.append(1 - (0.7*k))
+            ct += 1
+bp = ax.boxplot(x=box_vecs,
+                positions=positions,
+                notch=False,
+                patch_artist=True,
+                widths=widths,
+                flierprops={'marker': '.'},
+               )
+for box, color, alpha in zip(bp['boxes'], colors, alphas):
+    box.set_facecolor(color)
+    box.set_alpha(alpha)
+# make potential boxes and their whiskers dotted-lined
+for box in bp['boxes'][1::2]:
+    box.set_linestyle(':')
+for n, whisker_n_cap in enumerate(zip(bp['whiskers'], bp['caps'])):
+    if (n in range(2, len(bp['whiskers'])+4, 4) or
+        n in range(3, len(bp['whiskers'])+4, 4)):
+        whisker, cap = whisker_n_cap
+        whisker.set_linestyle(':')
+        cap.set_linestyle(':')
+ymin, ymax = ax.get_ylim()
+patches=[]
+for val in [p-(box_width/2)-(space_cont/2) for p in positions[::4]]:
+    ax.axvline(val, ymin, ymax, linestyle='-', color='black', linewidth=0.5)
+    ax.axvline(val+(0.5*cont_tot_width), ymin, ymax, linestyle='-',
+                   color='black', linewidth=0.5)
+    patch = Rectangle(xy=(val, ax.get_ylim()[0]),
+                      width=0.5*cont_tot_width,
+                      height=np.diff(ax.get_ylim()),
+                     )
+    patches.append(patch)
+p = PatchCollection(patches, alpha=0.1, color='black', zorder=0)
+ax.add_collection(p)
+ax.set_xlim(positions[0]-(box_width/2)-(space_cont/2),
+            positions[-1]+(box_width/2)+(space_cont/2))
+ax.set_xticks([p+(box_width/2)+(space_NDC_no_yes/2) for p in positions[1::4]],
+              conts)
+ax.tick_params(labelsize=14)
+ax.set_xlabel('continent', fontdict={'fontsize':16})
+ax.set_ylabel('woody C density ($Mg\ C\ ha^{-1}$)', fontdict={'fontsize':16})
+fig_1.show()
+if save_it:
+    fig_1.savefig('current_and_potential_boxplots.png', dpi=700)
+
+
+
+
+ax.boxplot(x=box_vecs,
+           y='density',
+           hue='NDC',
+           data=data_for_figs_long[data_for_figs_long['when']=='potential'],
+           ax=ax,
+           dodge=True,
+           showfliers=False,
+           zorder=1,
+           width=0.3,
+           positions=np.linspace(0.15, len(conts)*2*0.5, len(conts)*2),
+           )
+ax.legend([], [], frameon=False)
+conts = data_for_figs_long.cont.unique()
+for p in ax.patches:
+    p.set_alpha(0.4)
+sns_ax = sns.boxplot(x='cont',
+            y='density',
+            hue='NDC',
+            data=data_for_figs_long[data_for_figs_long['when']=='current'],
+            ax=ax,
+            dodge=True,
+            showfliers=False,
+            zorder=0,
+            width=0.3,
+            positions=np.linspace(0.45, len(conts)*2*0.5, len(conts)*2),
+             )
+ax.legend([], [], frameon=False)
+patch_dict = {i: int(p.get_path().vertices[0][0]+0.5) for i,
+            p in enumerate(ax.patches) if isinstance(p, mpl.patches.PathPatch)}
+for p_i, cont_i in patch_dict.items():
+    ax.patches[p_i].set_facecolor(continents.loc[conts[cont_i], 'color'])
+# add solid and dotted lines and solid boxes to label NDC/non-NDC nations
+ymin, ymax = ax.get_ylim()
+patches = []
+for val in np.linspace(0, len(conts)-1, len(conts)):
+    ax.axvline(val, ymin, ymax, linestyle='-', color='black', linewidth=0.5)
+    if val > 0:
+        ax.axvline(val-0.5, ymin, ymax, linestyle='-',
+                   color='black', linewidth=0.5)
+    patch = Rectangle(xy=(val-0.5, ax.get_ylim()[0]),
+                      width=0.5,
+                      height=np.diff(ax.get_ylim()),
+                     )
+    patches.append(patch)
+p = PatchCollection(patches, alpha=0.1, color='black', zorder=0)
+ax.add_collection(p)
+fig_1.show()
+
+
+
+
+
+
+
+
+
+
+
+
+
 fig_1 = plt.figure(figsize=(14,8))
 ax = fig_1.add_subplot(111)
 # use seaborn to get non-overlapping x,y points, but then feed them into
@@ -767,6 +901,21 @@ print(('\n\nt-test of sig. diff. between woody C ag-land density in NDC and '
 ############################################
 # PLOT 2: current woody C density vs HDI/GDP
 ############################################
+
+
+def scale_markersizes(vals, min_marksize=20, max_marksize=250, transform=None):
+    if transform == 'log':
+        vals = np.log10(vals)
+    # NOTE: perhaps makes most sense to scale with sqrt, since mpl expresses
+    #       scatterploint marker size in pt^^2, i.e., sqrt of point area;
+    #       however I don't really know anything about the science around
+    #       perception of size in plots...
+    elif transform == 'sqrt':
+        vals = np.sqrt(vals)
+    vals_0to1 = (vals - np.min(vals))/(np.max(vals) - np.min(vals))
+    scaled_vals = (vals_0to1 * (max_marksize - min_marksize)) + min_marksize
+    return scaled_vals
+
 
 #is current woody C density roughly correlated with GDP? HDI?
 # NOTE: GDP data from: https://data.worldbank.org/indicator/NY.GDP.MKTP.CD
