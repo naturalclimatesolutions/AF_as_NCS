@@ -572,7 +572,7 @@ data_for_figs_long['when'] = [when_vals[val] for val in data_for_figs_long['when
 # get names of countries in nth quantile for total feasible mitigation by 2050
 
 
-fig_1 = plt.figure(figsize=(14,8))
+fig_1 = plt.figure(figsize=(9,8))
 ax = fig_1.add_subplot(1,1,1)
 cont_tot_width = 1.4
 space_curr_potent = 0.05
@@ -624,6 +624,15 @@ bp = ax.boxplot(x=box_vecs,
 for box, color, alpha in zip(bp['boxes'], colors, alphas):
     box.set_facecolor(color)
     box.set_alpha(alpha)
+# add Xs in 'yes-NDC' columns for N. Am. and Oceania
+ax.scatter([np.mean(positions[6:8]),
+            np.mean(positions[14:16])],
+           [0,0],
+           marker='x',
+           color='black',
+           s=200,
+           linewidth=4,
+          )
 # make potential boxes and their whiskers dotted-lined
 for box in bp['boxes'][1::2]:
     box.set_linestyle(':')
@@ -650,243 +659,19 @@ ax.set_xlim(positions[0]-(box_width/2)-(space_cont/2),
             positions[-1]+(box_width/2)+(space_cont/2))
 ax.set_xticks([p+(box_width/2)+(space_NDC_no_yes/2) for p in positions[1::4]],
               conts)
-ax.tick_params(labelsize=14)
-ax.set_xlabel('continent', fontdict={'fontsize':16})
-ax.set_ylabel('woody C density ($Mg\ C\ ha^{-1}$)', fontdict={'fontsize':16})
+ax.tick_params(labelsize=12)
+ax.set_xlabel('continent', fontdict={'fontsize':18})
+ax.set_ylabel('woody C density ($Mg\ C\ ha^{-1}$)', fontdict={'fontsize':18})
+fig_1.subplots_adjust(left=0.08,
+                      bottom=0.1,
+                      right=0.98,
+                      top=0.98,
+                     )
 fig_1.show()
 if save_it:
     fig_1.savefig('current_and_potential_boxplots.png', dpi=700)
 
 
-
-
-ax.boxplot(x=box_vecs,
-           y='density',
-           hue='NDC',
-           data=data_for_figs_long[data_for_figs_long['when']=='potential'],
-           ax=ax,
-           dodge=True,
-           showfliers=False,
-           zorder=1,
-           width=0.3,
-           positions=np.linspace(0.15, len(conts)*2*0.5, len(conts)*2),
-           )
-ax.legend([], [], frameon=False)
-conts = data_for_figs_long.cont.unique()
-for p in ax.patches:
-    p.set_alpha(0.4)
-sns_ax = sns.boxplot(x='cont',
-            y='density',
-            hue='NDC',
-            data=data_for_figs_long[data_for_figs_long['when']=='current'],
-            ax=ax,
-            dodge=True,
-            showfliers=False,
-            zorder=0,
-            width=0.3,
-            positions=np.linspace(0.45, len(conts)*2*0.5, len(conts)*2),
-             )
-ax.legend([], [], frameon=False)
-patch_dict = {i: int(p.get_path().vertices[0][0]+0.5) for i,
-            p in enumerate(ax.patches) if isinstance(p, mpl.patches.PathPatch)}
-for p_i, cont_i in patch_dict.items():
-    ax.patches[p_i].set_facecolor(continents.loc[conts[cont_i], 'color'])
-# add solid and dotted lines and solid boxes to label NDC/non-NDC nations
-ymin, ymax = ax.get_ylim()
-patches = []
-for val in np.linspace(0, len(conts)-1, len(conts)):
-    ax.axvline(val, ymin, ymax, linestyle='-', color='black', linewidth=0.5)
-    if val > 0:
-        ax.axvline(val-0.5, ymin, ymax, linestyle='-',
-                   color='black', linewidth=0.5)
-    patch = Rectangle(xy=(val-0.5, ax.get_ylim()[0]),
-                      width=0.5,
-                      height=np.diff(ax.get_ylim()),
-                     )
-    patches.append(patch)
-p = PatchCollection(patches, alpha=0.1, color='black', zorder=0)
-ax.add_collection(p)
-fig_1.show()
-
-
-
-
-
-
-
-
-
-
-
-
-
-fig_1 = plt.figure(figsize=(14,8))
-ax = fig_1.add_subplot(111)
-# use seaborn to get non-overlapping x,y points, but then feed them into
-# scatter myself, to be able to adjust facecolor and size
-points_dict = {}
-NDC_offset_dict = {'no': 0, 'yes': 0.5}
-xtick_locs = []
-xtick_labs = []
-for i, cont in enumerate(data_for_figs_long['cont'].unique()):
-    xtick_locs.append(i + 0.25)
-    xtick_labs.append(cont)
-    data = data_for_figs_long[data_for_figs_long['cont'] == cont]
-    points_dict[cont] = {}
-    for j, NDC_val in enumerate(['no', 'yes']):
-        points_dict[cont][NDC_val] = {}
-        subdata = data[data['NDC'] == NDC_val]
-        for k, when in enumerate(data_for_figs_long['when'].unique()):
-            subsubdata = subdata[subdata['when'] == when]
-            ys = subsubdata['density']
-            assert False not in [val == NDC_val for val in subsubdata['NDC']]
-            xs = [i + NDC_offset_dict[val] for val in subsubdata['NDC']]
-            orig_xy = np.stack((xs, ys)).T
-            if len(xs) > 0:
-                sp = sns.categorical._SwarmPlotter(xs, ys,
-                                                   # V dummy args V
-                                                   'cont', subsubdata,
-                                                   None, None,
-                                                   True, None,
-                                                   'red', None)
-                                                   # ^ dummy args ^
-                swarm_xy = sp.beeswarm(orig_xy=orig_xy, d=d_swarm)
-                # store points
-                points_dict[cont][NDC_val][when] = swarm_xy
-                # set plotting params based on whether plotting current or potential
-                if when == 'potential':
-                    facecolors = 'none'
-                    edgecolors=[cont_palette[i] for c in subsubdata['cont']]
-                    s=subsubdata['sizes']
-                    alpha=1
-                    linewidth=1.5
-                    # jitter the bubbles more than the points
-                    # (to make the piles 'steam' more)
-                    jitter = np.random.normal(loc=0,
-                                              scale=extra_jitter,
-                                              size=swarm_xy.shape[0])
-                    jitter = np.clip(jitter,
-                                     a_min=-1*max_extra_jitter,
-                                     a_max=max_extra_jitter)
-                    swarm_xy[:,0] = swarm_xy[:,0] + jitter
-                else:
-                    facecolors=[cont_palette[i] for c in subsubdata['cont']]
-                    edgecolors='none'
-                    s= marksize
-                    alpha=1
-                    linewidth=None
-                # set marker types
-                if NDC_val == 'no':
-                    if when == 'current':
-                        marker='x'
-                    else:
-                        marker='X'
-                elif NDC_val == 'yes':
-                    marker='o'
-                # plot the points
-                ax.scatter(x=swarm_xy[:,0],
-                           y=swarm_xy[:,1],
-                           edgecolors=edgecolors,
-                           facecolors=facecolors,
-                           linewidth=linewidth,
-                           s=s,
-                           alpha=alpha,
-                           marker=marker,
-                          )
-                # add country names, if in nth quantile for total mit potential
-                top_countries = set(subsubdata.NAME_EN).intersection(q_countries)
-                if when == 'potential' and len(top_countries) > 0:
-                    for country in top_countries:
-                        row_i = [i for i in range(len(subsubdata)) if
-                                 subsubdata.iloc[i]['NAME_EN'] == country]
-                        assert len(row_i) == 1
-                        country_x, country_y = swarm_xy[row_i[0], :]
-                        # manually shorten some country names
-                        if country == 'United States of America':
-                            country = 'USA'
-                        if country == "People's Republic of China":
-                            country = 'China'
-                        ax.text(country_x+0.005, country_y+0.125, country,
-                                color='black', alpha=0.8, size=9, rotation=45)
-# axis formatting
-ax.set_xlabel('continent', fontdict={'fontsize': 14})
-ax.set_ylabel(('area-weighted density of woody C\nin crop and grazing'
-               'lands ($Mg\ C\ ha^{-1}$)'),
-              fontdict={'fontsize': 14})
-ax.set_xticks(xtick_locs, xtick_labs)
-ax.set_xlim(xtick_locs[0]-0.5, xtick_locs[-1]+0.5)
-# add solid and dotted lines and solid boxes to label NDC/non-NDC nations
-patches = []
-for loc in xtick_locs:
-    ax.axvline(loc, *ax.get_ylim(),
-               linestyle=':', color='black')
-    ax.axvline(loc+0.5, *ax.get_ylim(),
-               linestyle='-', color='black', linewidth=2)
-    patch = Rectangle(xy=(loc-0.5, ax.get_ylim()[0]),
-                      width=0.5,
-                      height=np.diff(ax.get_ylim()),
-                     )
-    patches.append(patch)
-p = PatchCollection(patches, alpha=0.1, color='black', zorder=0)
-ax.add_collection(p)
-ax.tick_params(labelsize=12)
-# custom legend at the side
-col_data = data_for_figs['agrofor_feascum']
-vals = np.linspace(np.quantile(np.sqrt(col_data), 0.05),
-                   np.quantile(np.sqrt(col_data), 0.95), 5)**2
-vals = [round(val, -(len(str(int(val)))-2)) for val in vals]
-sizes = scale_markersizes(vals)
-legend_elements = []
-for val, size in zip(vals, sizes):
-    label = '$%s.%s\ ×\ 10^{%i}$' % (str(val)[0],
-                                     str(val)[1],
-                                     len(str(val))-1)
-    # add circle and X markers
-    element_x = Line2D([0], [0],
-                     marker='X',
-                     color='none',
-                     markeredgecolor='black',
-                     label='',
-                     markerfacecolor='none',
-                     markersize=np.sqrt(size))
-    element_o = Line2D([0], [0],
-                     marker='o',
-                     color='none',
-                     markeredgecolor='black',
-                     label=label,
-                     markerfacecolor='none',
-                     markersize=np.sqrt(size))
-    legend_elements.append(element_x)
-    legend_elements.append(element_o)
-    # add spacing element
-    if val < vals[-1]:
-        element_blank = Line2D([0], [0],
-                               marker='.',
-                               color='none',
-                               markeredgecolor='none',
-                               label='',
-                               alpha=0,
-                               markerfacecolor='none',
-                               markersize=np.sqrt(size))
-        legend_elements.append(element_blank)
-lgd_title = 'total mitigation\npotential by\n2050 ($Mg\ C$)'
-lgd = ax.legend(handles=legend_elements,
-                bbox_to_anchor=(1.01, 0.9),
-                prop={'size': 12},
-                title=lgd_title,
-                title_fontsize=14,
-                fancybox=True,
-               )
-fig_1.subplots_adjust(left=0.07,
-                      bottom=0.09,
-                      right=0.86,
-                      top=0.96,
-                     )
-
-if save_it:
-    fig_1.savefig('current_and_potential_boiling_pots.png', dpi=700)
-
-fig_1.show()
 
 # t-test of significant diff between NDC and non-NDC groups
 res = ttest_ind(data_for_figs[data_for_figs.NDC_num==1]['wt_avg_density'],
@@ -948,7 +733,7 @@ sns.scatterplot(x='hdi', y='log_dens', hue='cont', data=data_w_hdi, ax=ax,
                 size='sizes', sizes=(min_scattersize, max_scattersize),
                 style='NDC', style_order=('yes', 'no'),
                 palette=cont_palette[:len(data_for_figs['cont'].unique())],
-                edgecolor='black', linewidth=0.5, alpha=0.8, legend='brief')
+                edgecolor='black', linewidth=0.5, alpha=0.8, legend=False)
 sns.regplot(x='hdi', y='log_dens', data=data_w_hdi, ax=ax, scatter=False)
 data_for_test = data_w_hdi.loc[:, ['hdi', 'log_dens']].dropna(how='any')
 r, p = stats.pearsonr(data_for_test['hdi'], data_for_test['log_dens'])
@@ -976,7 +761,53 @@ ax.set_ylabel('log average ag. woody C density (yr. 2000)',
 ax.set_xlim(0.25, 0.96)
 ax.set_ylim(-6.2, 3)
 ax.tick_params(labelsize=12)
-plt.legend(bbox_to_anchor=(1.01, 0.9))
+# custom legend at the side
+feascum_data = data_w_hdi['agrofor_feascum']
+vals = np.linspace(np.quantile(np.sqrt(feascum_data), 0.05),
+                   np.quantile(np.sqrt(feascum_data), 0.95), 5)**2
+vals = [round(val, -(len(str(int(val)))-2)) for val in vals]
+sizes = scale_markersizes(vals)
+legend_elements = []
+for val, size in zip(vals, sizes):
+    label = '$%s.%s\ ×\ 10^{%i}$' % (str(val)[0],
+                                     str(val)[1],
+                                     len(str(val))-1)
+    # add circle and X markers
+    element_x = Line2D([0], [0],
+                     marker='X',
+                     color='none',
+                     markeredgecolor='black',
+                     label='',
+                     markerfacecolor='none',
+                     markersize=np.sqrt(size))
+    element_o = Line2D([0], [0],
+                     marker='o',
+                     color='none',
+                     markeredgecolor='black',
+                     label=label,
+                     markerfacecolor='none',
+                     markersize=np.sqrt(size))
+    legend_elements.append(element_x)
+    legend_elements.append(element_o)
+    # add spacing element
+    if val < vals[-1]:
+        element_blank = Line2D([0], [0],
+                               marker='.',
+                               color='none',
+                               markeredgecolor='none',
+                               label='',
+                               alpha=0,
+                               markerfacecolor='none',
+                               markersize=np.sqrt(size))
+        legend_elements.append(element_blank)
+lgd_title = 'total mitigation\npotential by\n2050 ($Mg\ C$)'
+lgd = ax.legend(handles=legend_elements,
+                bbox_to_anchor=(1.01, 0.9),
+                prop={'size': 12},
+                title=lgd_title,
+                title_fontsize=14,
+                fancybox=True,
+               )
 fig_2.subplots_adjust(left=0.08,
                       bottom=0.08,
                       right=0.81,
