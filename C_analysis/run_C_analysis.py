@@ -8,6 +8,7 @@ from matplotlib.collections import PatchCollection
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 from scipy.spatial import ConvexHull
 from scipy import stats
+from statsmodels.regression.linear_model import OLS
 import seaborn as sns
 from latlon_utils import get_climate
 import re, os
@@ -25,7 +26,8 @@ USE_ALL_DATA = False
 # load data
 ###############################################
 # read in Cardinael data
-agb = pd.read_excel('./Cardinael_et_al_2018_ERL_Database_AFS_Biomass.xlsx')
+agb = pd.read_excel(('./Cardinael_et_al_2018_ERL_Database_AFS_Biomass'
+                     '_DETH_MEAS_YR_ADDED.xlsx'))
 soc = pd.read_excel('./Cardinael_et_al_2018_ERL_Database_AFS_SOC_DETH_EDIT.xlsx')
 
 if USE_ALL_DATA:
@@ -65,6 +67,7 @@ agb = agb.loc[:, ['Description',
                   'BGB(Mg/ha) ',
                   'AGB Sequestration rate ',
                   'BGB Sequestration rate ',
+                  'MEAS_YR',
                  ]]
 
 # get count of rows dropped, to be used in assert statements later
@@ -96,6 +99,7 @@ agb.columns = ['meas_type',
                'bgb_stock',
                'rate',
                'bgb_rate',
+               'meas_yr',
               ]
 # handle fact that stock measurements straddle stock and comm-unit stock cols
 corrected_stock = []
@@ -176,8 +180,9 @@ soc.columns = ['valid',
                'rate',
               ]
 
-# add col that's in agb and bgb data missing from here
+# add cols that are in agb and bgb data missing from here
 soc['age_bm'] = np.nan
+soc['meas_yr'] = np.nan
 
 # line up columns in same order
 bgb = bgb.loc[:, agb.columns]
@@ -212,7 +217,7 @@ all['practice'] = practice
 #  for comparison to published estimates)
 all_agb = all[all['var'] == 'agb']
 agb_pts = all_agb.loc[:, ['lat', 'lon', 'stock', 'practice',
-                          'clim', 'age_sys', 'dens']]
+                          'clim', 'age_sys', 'dens', 'meas_yr']]
 # add a unique ID, to be able to match back up to shuffled data from GEE
 np.random.seed(2)
 agb_pts['ID'] = np.abs(np.int64(np.random.normal(size=len(agb_pts))*100000))
@@ -413,6 +418,13 @@ ax_scat.scatter([med_log], [med_log], marker='*', s=70,
                 alpha=0.9, facecolor='None', edgecolor='k')
 ax_scat.scatter([chap_med_log], [chap_med_log], marker='o', s=70,
                 alpha=0.9, facecolor='None', edgecolor='k')
+# print medians
+med_nonlog = 10**med_log
+chap_med_nonlog = 10**chap_med_log
+print('\n\nMedian: only Chapman-covered points: %0.2f\n\n' % chap_med_nonlog)
+print('\n\nMedian: all points: %0.2f\n\n' % med_nonlog)
+print('\n\nPercent increase using all points: %0.2f%%\n\n' % (
+                    100 * ((med_nonlog - chap_med_nonlog)/chap_med_nonlog)))
 # label axes
 ax_scat.set_xlabel('$log_{10}$ published AGB density ($Mg\ C\ ha^{-1}$)',
                    fontdict={'fontsize':12})
@@ -590,6 +602,9 @@ agb_comp['coord_prec_bin'] = prec_bin_col
 # print variances for low, mod, and high-precision coordinates,
 # and print results of Bartlett's test for equal variances
 # (for all normally distributed samples, since histograms look close enough)
+for _ in range(3):
+    print('-'*80)
+print('\n\n')
 print(('\n\nStandard deviations of differences between WHRC '
        'remotely sensed estimates and\npublished AGB '
        'for samples with different coordinate precisions:\n'))
@@ -607,6 +622,55 @@ bart = stats.bartlett(*samples)
 print('\n\tstat: %0.4f\n' % bart.statistic)
 print('\n\tp-value: %0.4f\n' % bart.pvalue)
 
-# TODO:
 # assess correlation between divergence from 1:1 line and divergence of 2000
 # RS year from published measurement year
+for _ in range(3):
+    print('-'*80)
+print('\n\n')
+# subtracting WHRC measurement year (2000) from Cardinael data's measurement
+# years (collected from pubs), in the same order as the stock-diff calculation,
+# so that a positive correlation would be expected (i.e., negative values have
+# larger stocks and later measurement dates in WHRC, and positive values are
+# the opposite)
+agb_comp['meas_yr_diff'] = np.float64(agb_comp['meas_yr'] - 2000)
+agb_comp = agb_comp[agb_comp['meas_yr_diff'] > -10]
+fig_yr_diff, ax_yr_diff = plt.subplots(1, 1, figsize=(6,5))
+for prac in pracs:
+    sub_agb_comp = agb_comp[agb_comp['practice'] == prac]
+    sns.scatterplot(x='meas_yr_diff',
+                    y='stock_diff_whrc',
+                    hue='practice',
+                    palette=[prac_colors[prac]],
+                    edgecolor='black',
+                    s=30,
+                    alpha=0.5,
+                    data=sub_agb_comp,
+                    legend=True,
+                    ax=ax_yr_diff)
+sns.regplot(x='meas_yr_diff', y='stock_diff_whrc', data=agb_comp, scatter=False)
+ax_yr_diff.set_xlabel(('measurement year discrepancy\n(Cardinael data '
+                       'year - WHRC data year (2000))'),
+                       fontdict={'fontsize':12})
+ax_yr_diff.set_ylabel(('stock estimate difference ($Mg\ C\ ha^{-1}$)\n'
+                       '(Cardinael data stock estmate - '
+                       'WHRC stock estimate'),
+                       fontdict={'fontsize':12})
+ax_yr_diff.set_xlim(-16, 16)
+ax_yr_diff.tick_params(labelsize=8)
+agb_comp_reg = agb_comp.loc[:, ['stock_diff_whrc', 'meas_yr_diff']].dropna()
+agb_comp_reg = agb_comp_reg[agb_comp_reg['meas_yr_diff'] > -10]
+print(('\n\nResults of regression of stock-estimate difference on measurement-'
+       'year difference:\n\n'))
+mod = OLS(agb_comp_reg['stock_diff_whrc'],
+          np.vstack((np.ones(len(agb_comp_reg)),
+                     agb_comp_reg['meas_yr_diff'])).T).fit()
+print('\n\tintercept: %0.4f $Mg\ C\ ha^{-1} (p=%0.2e)' % (mod.params['const'],
+                                          mod.pvalues['const']))
+print('\n\tslope: %0.4f $Mg\ C\ ha^{-1} yr^{-1} (p=%0.2e)' % (mod.params['x1'],
+                                      mod.pvalues['x1']))
+print('\n\tR-squared: %0.4f' % mod.rsquared)
+fig_yr_diff.subplots_adjust(left=0.2, right=0.97, bottom=0.15, top=0.93,
+                            wspace=0, hspace=0)
+fig_yr_diff.savefig('regression_WHRC_Cardinael_stock_diff_on_meas_yr_diff.png',
+               dpi=700)
+fig_yr_diff.show()

@@ -6,7 +6,9 @@
 *.tif
 *.zip
 *.xlsx
+*.odg
 __pycache__
+MRV_fig/
 citation_trends/AF*.txt
 citation_trends/NCS*.txt
 mapping/rosenstock_et_al_2019_data/*.xlsx

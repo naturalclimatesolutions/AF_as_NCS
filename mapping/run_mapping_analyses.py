@@ -58,6 +58,8 @@ subplots_adj_right=0.99
 subplots_adj_top=0.99
 subplots_adj_wspace=0.01
 subplots_adj_hspace=0.01
+min_scattersize=25
+max_scattersize=350
 min_x=0
 max_x=1
 min_y=0
@@ -595,10 +597,10 @@ positions = []
 box_vecs = []
 colors = []
 alphas = []
+conts = data_for_figs_long.cont.unique()
 widths = [box_width/2] * (4 * len(conts))
 no_NDC_box_ll_xs = [0]
 ct = 0
-conts = data_for_figs_long.cont.unique()
 for i, cont in enumerate(conts):
     data = data_for_figs_long[data_for_figs_long['cont'] == cont]
     positions.extend([p + (i*cont_tot_width) for p in positions_per_cont])
@@ -688,7 +690,7 @@ print(('\n\nt-test of sig. diff. between woody C ag-land density in NDC and '
 ############################################
 
 
-def scale_markersizes(vals, min_marksize=20, max_marksize=250, transform=None):
+def scale_markersizes(vals, min_marksize, max_marksize, transform=None):
     if transform == 'log':
         vals = np.log10(vals)
     # NOTE: perhaps makes most sense to scale with sqrt, since mpl expresses
@@ -709,7 +711,6 @@ def scale_markersizes(vals, min_marksize=20, max_marksize=250, transform=None):
 
 def scale_var(var):
     return (var - np.min(var))/(np.max(var) - np.min(var))
-
 
 data_for_figs['pct_below'] = np.clip(((data_for_figs['agrofor_feascum'] -
                                      data_for_figs['total_biomass']/2)/(
@@ -732,7 +733,7 @@ data_w_hdi['sizes'] = sizes
 sns.scatterplot(x='hdi', y='log_dens', hue='cont', data=data_w_hdi, ax=ax,
                 size='sizes', sizes=(min_scattersize, max_scattersize),
                 style='NDC', style_order=('yes', 'no'),
-                palette=cont_palette[:len(data_for_figs['cont'].unique())],
+                palette=dict(continents.loc[:,'color']),
                 edgecolor='black', linewidth=0.5, alpha=0.8, legend=False)
 sns.regplot(x='hdi', y='log_dens', data=data_w_hdi, ax=ax, scatter=False)
 data_for_test = data_w_hdi.loc[:, ['hdi', 'log_dens']].dropna(how='any')
@@ -748,12 +749,13 @@ for i, row in data_w_hdi.iterrows():
         country = 'China'
     if (row['log_dens'] < np.nanpercentile(data_w_hdi['log_dens'], 10) and
         pd.notnull(row['agrofor_feascum'])):
-        ax.text(row['hdi'], row['log_dens'], country,
-                color='gray', rotation=20, size=9)
+        #ax.text(row['hdi'], row['log_dens'], country,
+        #        color='gray', rotation=0, size=9)
+        pass
     if row['agrofor_feascum'] > np.nanpercentile(data_w_hdi['agrofor_feascum'],
                                                  90):
         ax.text(row['hdi'], row['log_dens'], country,
-                color='black', rotation=20, size=9)
+                color='black', weight='bold', rotation=0, size=9)
 ax.set_xlabel('human development index (HDI; yr. 2000)',
               fontdict={'fontsize': 14})
 ax.set_ylabel('log average ag. woody C density (yr. 2000)',
@@ -766,7 +768,7 @@ feascum_data = data_w_hdi['agrofor_feascum']
 vals = np.linspace(np.quantile(np.sqrt(feascum_data), 0.05),
                    np.quantile(np.sqrt(feascum_data), 0.95), 5)**2
 vals = [round(val, -(len(str(int(val)))-2)) for val in vals]
-sizes = scale_markersizes(vals)
+sizes = scale_markersizes(vals, min_scattersize, max_scattersize)
 legend_elements = []
 for val, size in zip(vals, sizes):
     label = '$%s.%s\ ×\ 10^{%i}$' % (str(val)[0],
@@ -817,3 +819,27 @@ fig_2.subplots_adjust(left=0.08,
 fig_2.show()
 if save_it:
     fig_2.savefig('woody_C_vs_HDI_scatter.png', dpi=700)
+
+
+# STATISTICAL TESTS:
+    # t-tests of difference in ag-area-weighted average woody C density
+    # between AF and non-AF NDC countries
+    test = stats.ttest_ind(
+        data_for_figs[data_for_figs['NDC'] == 'yes']['wt_avg_density'],
+        data_for_figs[data_for_figs['NDC'] == 'no']['wt_avg_density'],
+        equal_var=False,
+        nan_policy='omit',
+        )
+    print('\n\nT-TEST OF CURRENT DENSITY IN AF-NDC VS. NON-AF-NDC NATIONS:\n')
+    print(test)
+    # and same test, but for potential woody C density
+    test = stats.ttest_ind(
+        data_for_figs[data_for_figs['NDC'] == 'yes']['agrofor_feasden_Mgha'],
+        data_for_figs[data_for_figs['NDC'] == 'no']['agrofor_feasden_Mgha'],
+        equal_var=False,
+        nan_policy='omit',
+        )
+    print('\n\nT-TEST OF POTENTIAL DENSITY IN AF-NDC VS. NON-AF-NDC NATIONS:\n')
+    print(test)
+
+
