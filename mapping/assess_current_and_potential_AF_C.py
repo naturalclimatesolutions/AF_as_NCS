@@ -18,11 +18,6 @@ from copy import deepcopy
 import warnings
 
 
-# TODO:
-
-    # clean up Chapman map and format and save 
-
-
 # plot params
 save_it = True
 map_minx = -12700000
@@ -304,22 +299,6 @@ for i, row in af_locs.to_crs(8857).iterrows():
     in_chap.append(np.invert(np.isnan(chap_val)))
 af_locs['in_chap'] = in_chap
 af_locs['in_chap_markers'] = [{True: 'o', False: 'X'}[val] for val in in_chap]
-
-# remap AF practices
-
-# get array of all the practices
-pracs = agb_comp.practice.unique()
-# dict of practice colors; Bright 6 color palette from http://tsitsul.in/blog/coloropt/
-palette = [
-           '#e935a1', # pink -> silvoarable and parkland
-           '#537eff', # neon blue -> intercropping
-           '#00e3ff', # light blue -> fallow
-           '#efe645', # yellow -> silvopasture
-           '#00cb85', # green -> multistrata
-           '#e15623', # carrot -> hedgerow
-          ]
-prac_colors = dict(zip(pracs, palette))
-
 
 
 # utils functions
