@@ -11,13 +11,20 @@ n_coords_dec_for_dedup = 3
 plot_it = False
 
 # load data
-fulldf = pd.read_excel('./Agroforestry Data Dec 2021_MERGED_METANALYSES.xlsx',
-                   sheet_name='S2 sites')
+sites_df = pd.read_excel('./Agroforestry Data Dec 2021_MERGED_METANALYSES.xlsx',
+                         sheet_name='S2 sites')
+measu_df = pd.read_excel('./Agroforestry Data Dec 2021_MERGED_METANALYSES.xlsx',
+                         sheet_name='S3 measurements')
+
+fulldf = pd.merge(sites_df, measu_df,
+                  left_on=['site.id', 'study.id', 'site.sitename'],
+                  right_on=['site.ID', 'study.id', 'site.sitename'],
+                  how='left')
 
 # subset columns
 df = fulldf.loc[:, ['site.id', 'study.id', 'site.sitename', 'site.state',
                     'site.country', 'lat', 'lon', 'other.reference',
-                    'sites.notes']]
+                    'sites.notes', 'refor.type']]
 
 # rename columns (GEE doesn't like periods in them)
 df.columns = [col.replace('.', '_') for col in df.columns]

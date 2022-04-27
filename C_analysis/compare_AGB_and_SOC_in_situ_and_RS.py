@@ -410,21 +410,30 @@ dataset_label = 'WHRC et al. unpub. 2022'
 ax_scat = fig.add_subplot(gs[0,0])
 ax_scat.plot([-100, 100], [-100, 100], ':k', alpha=0.3)
 # median marks (Chapman sites and all sites)
-med_log = np.nanmedian(np.log10(agb_comp.card_stock))
-chap_med_log = np.nanmedian(np.log10(agb_comp[agb_comp.in_chap].card_stock))
-med_abs = np.nanmedian(agb_comp.card_stock)
-chap_med_abs = np.nanmedian(agb_comp[agb_comp.in_chap].card_stock)
-ax_scat.scatter([med_log], [med_log], marker='*', s=70,
+med_log_card = np.log10(np.nanmedian(agb_comp.card_stock))
+chap_med_log_card = np.log10(np.nanmedian(agb_comp[agb_comp.in_chap].card_stock))
+med_abs_card = np.nanmedian(agb_comp.card_stock)
+chap_med_abs_card = np.nanmedian(agb_comp[agb_comp.in_chap].card_stock)
+med_log_whrc = np.log10(np.nanmedian(agb_comp.whrc_stock))
+chap_med_log_whrc = np.log10(np.nanmedian(agb_comp[agb_comp.in_chap].whrc_stock))
+med_abs_whrc = np.nanmedian(agb_comp.whrc_stock)
+chap_med_abs_whrc = np.nanmedian(agb_comp[agb_comp.in_chap].whrc_stock)
+
+ax_scat.scatter([med_log_card], [med_log_whrc], marker='*', s=70,
                 alpha=0.9, facecolor='None', edgecolor='k')
-ax_scat.scatter([chap_med_log], [chap_med_log], marker='o', s=70,
+ax_scat.scatter([chap_med_log_card], [chap_med_log_whrc], marker='o', s=70,
                 alpha=0.9, facecolor='None', edgecolor='k')
 # print medians
-med_nonlog = 10**med_log
-chap_med_nonlog = 10**chap_med_log
-print('\n\nMedian: only Chapman-covered points: %0.2f\n\n' % chap_med_nonlog)
-print('\n\nMedian: all points: %0.2f\n\n' % med_nonlog)
+print('\n\nMedian in situ: only Chapman-covered points: %0.2f\n\n' % chap_med_abs_card)
+print('\n\nMedian in situ: all points: %0.2f\n\n' % med_abs_card)
 print('\n\nPercent increase using all points: %0.2f%%\n\n' % (
-                    100 * ((med_nonlog - chap_med_nonlog)/chap_med_nonlog)))
+                    100 * ((med_abs_card - chap_med_abs_card)/chap_med_abs_card)))
+print('\n\nMedian remote sensing: only Chapman-covered points: %0.2f\n\n' % chap_med_abs_whrc)
+print('\n\nMedian remote sensing: all points: %0.2f\n\n' % med_abs_whrc)
+print('\n\nPercent increase using all points: %0.2f%%\n\n' % (
+                    100 * ((med_abs_whrc - chap_med_abs_whrc)/chap_med_abs_whrc)))
+
+
 # label axes
 ax_scat.set_xlabel('$log_{10}$ published AGB density ($Mg\ C\ ha^{-1}$)',
                    fontdict={'fontsize':12})
@@ -613,14 +622,14 @@ for prec_bin in bins:
     std = agb_comp[agb_comp.coord_prec_bin==prec_bin]['stock_diff_whrc'].std()
     print('\n\tprecision: %s\n\n\tstd: %0.4f\n\n' % (prec_bin, std))
 
-print(("\n\nResults of Bartlett's test of equal variances (for "
-       "normally-distributed samples:\n\n"))
+print(("\n\nResults of Levene's test of equal variances (for "
+       "non-normally-distributed samples):\n\n"))
 samples = [agb_comp[agb_comp['coord_prec_bin']==b][
                                     'stock_diff_whrc'].values for b in bins]
 samples = [samp[np.invert(np.isnan(samp))] for samp in samples]
-bart = stats.bartlett(*samples)
-print('\n\tstat: %0.4f\n' % bart.statistic)
-print('\n\tp-value: %0.4f\n' % bart.pvalue)
+levene = stats.levene(*samples)
+print('\n\tstat: %0.4f\n' % levene.statistic)
+print('\n\tp-value: %0.4f\n' % levene.pvalue)
 
 # assess correlation between divergence from 1:1 line and divergence of 2000
 # RS year from published measurement year

@@ -11,7 +11,7 @@ from mpl_toolkits.axes_grid1 import make_axes_locatable
 import palettable
 import seaborn as sns
 import rioxarray as rxr
-from shapely.geometry import Polygon
+from shapely.geometry import Polygon, LineString
 from scipy.stats import ttest_ind
 from scipy import stats
 from copy import deepcopy
@@ -22,21 +22,14 @@ import warnings
 
     # clean up Chapman map and format and save 
 
-    # tie up boxplots
-        # nix fliers
-        # format axes, labels, etc
-
-    # need to plot or at least test separate slopes for each region
-    # (folding Oceania into Asia I guess?)?
-
-
 
 # plot params
 save_it = True
-map_minx = -13700000
-map_maxx = 16500000
-map_miny = -7000000
+map_minx = -12700000
+map_maxx = 16000000
+map_miny = -6600000
 map_maxy = 8392644
+add_latlon_lines = False
 suptitle_fontsize = 50
 title_fontsize = 40
 contour_axislab_fontsize = 10
@@ -215,6 +208,7 @@ continents = countries.dissolve('continent')
 continents.index = ['Africa', 'Antarctica', 'Asia',
                     'Europe', 'N. America', 'Oceania',
                     'C. & S. America\n& Caribbean']
+
 # set continents' color palette
 cont_palette = [sns.color_palette('bright')[i] for i in [4,8,6,9,3,1]]
 # make the pink less "AAARGHH!!!" and the yellow less "BAAART!!!"
@@ -298,6 +292,33 @@ chapman_ag_area_agg['cont'] = get_continents(chapman_ag_area_agg)
 chapman_potential['cont'] = get_continents(chapman_potential)
 potential['cont'] = get_continents(potential)
 af_locs['cont'] = get_continents(af_locs)
+
+# figure out if each location is covered by Chapman data or not
+# TODO: ACTUALLY EXTRACT VALUES FROM NATIVE-RES DATA INSTEAD!
+in_chap = []
+for i, row in af_locs.to_crs(8857).iterrows():
+    lon, lat = [i[0] for i in row.geometry.coords.xy]
+    chap_vals = chap_rast.sel(x=lon, y=lat, method='nearest').values
+    assert chap_vals.size == 1
+    chap_val = chap_vals[0]
+    in_chap.append(np.invert(np.isnan(chap_val)))
+af_locs['in_chap'] = in_chap
+af_locs['in_chap_markers'] = [{True: 'o', False: 'X'}[val] for val in in_chap]
+
+# remap AF practices
+
+# get array of all the practices
+pracs = agb_comp.practice.unique()
+# dict of practice colors; Bright 6 color palette from http://tsitsul.in/blog/coloropt/
+palette = [
+           '#e935a1', # pink -> silvoarable and parkland
+           '#537eff', # neon blue -> intercropping
+           '#00e3ff', # light blue -> fallow
+           '#efe645', # yellow -> silvopasture
+           '#00cb85', # green -> multistrata
+           '#e15623', # carrot -> hedgerow
+          ]
+prac_colors = dict(zip(pracs, palette))
 
 
 
@@ -437,16 +458,45 @@ data_for_figs['agrofor_feasden_Mgha'] = data_for_figs['agrofor_feasden']/1e6
 ##########################################################################
 
 
-def format_map_axes(ax, bcax, max_tickval=None):
+def format_map_axes(ax, bcax, max_tickval=None, add_latlon_lines=False):
     """
     Function to custom format map images
     """
     # set 'ocean' color
-    ax.set_facecolor('#ebf5f4')
+    #ax.set_facecolor('#ebf5f4')
+    ax.set_facecolor('#ffffff')
+
+    # manually add lat and lon lines
+    if add_latlon_lines:
+        lats = np.arange(-90, 100, 10)
+        lons = np.arange(-180, 190, 10)
+        lines = []
+        for lat in lats:
+            line = LineString([[x, lat] for x in np.linspace(min(lons),
+                                                             max(lons),
+                                                             500)])
+            lines.append(line)
+        for lon in lons:
+            line = LineString([[lon, y] for y in np.linspace(min(lats),
+                                                             max(lats),
+                                                             500)])
+            lines.append(line)
+        lines_gdf = gpd.GeoDataFrame(geometry=lines, crs=4326).to_crs(8857)
+        lines_gdf.plot(color='black',
+                       linewidth=0.5,
+                       linestyle='--',
+                       edgecolor='black',
+                       alpha=0.6,
+                       ax=ax,
+                       zorder=4,
+                      )
+
     # bound the longitude (cuts off Hawaii, but no data there, and otherwise
     # makes plot nicer; also cuts out Antarctica)
     ax.set_xlim((map_minx, map_maxx))
     ax.set_ylim((map_miny, map_maxy))
+    # make sure aspect ratio is equal
+    ax.set_aspect('equal')
     # get rid of axis labels
     ax.set_xlabel('')
     ax.set_ylabel('')
@@ -459,7 +509,7 @@ def format_map_axes(ax, bcax, max_tickval=None):
     # format colorbar axes
     bcax.xaxis.set_ticks_position('bottom')
     bcax.xaxis.set_label_text('woody C density ($Mg\ C\ ha^{-1}$)',
-                              fontdict={'fontsize': 18})
+                              fontdict={'fontsize': 15})
     bcax.tick_params(labelsize=14)
     #bcax.set_title(cbar_title_lookup[0], loc='left',
         #               fontdict={'fontsize':14, 'fontweight': 'bold'})
@@ -503,9 +553,9 @@ chap_rast.squeeze().plot.imshow(cmap=map_pal,
                                 zorder=1,
                                )
 # plot countries and continents
-countries.to_crs(8857).plot(color='none',
+countries.to_crs(8857).plot(color='#dddddd22',
                             linewidth=0.25,
-                            edgecolor='white',
+                            edgecolor='#9d9d9d',
                             ax=ax,
                             zorder=2,
                             )
@@ -513,23 +563,24 @@ for cont in continents.index.unique():
     if cont not in ['Antarctica', 'Seven Seas']:
         data = continents.reset_index()[continents.reset_index()['index'] == cont]
         data.to_crs(8857).plot(color='none',
-                               linewidth=1.5-(1.25*(cont == 'Antarctica')),
-                               edgecolor=data['color'].values[0],
+                               linewidth=0.25,
+                               #edgecolor=data['color'].values[0],
+                               edgecolor='#9d9d9d',
                                ax=ax,
                                zorder=2,
                                )
-
 # add locations
-ax.scatter(af_locs.to_crs(8857).centroid.x,
-           af_locs.to_crs(8857).centroid.y,
-           c='black',
-           s=35,
-           marker='X',
-           edgecolor='white',
-           linewidth=0.6,
-           alpha=1,
-           zorder=3,
-          )
+for i, row in af_locs.to_crs(8857).iterrows():
+    ax.scatter(row.geometry.xy[0][0],
+               row.geometry.xy[1][0],
+               c='black',
+               s=25+(25*np.invert(row['in_chap'])),
+               marker=row['in_chap_markers'],
+               edgecolor='white',
+               linewidth=0.6,
+               alpha=1,
+               zorder=3,
+              )
 
 # fix the colorbar and set ticks and labels
 patches_0to5 = [Rectangle(xy=(0, 0), width=5, height=1)]
@@ -540,11 +591,11 @@ bcax.set_ylim((0, 1))
 bcax.set_xticks([0,5,10,20,30,40], ['0', '5', '10', '20', '30', '40+'])
 bcax.axvline(x=5, ymin=0, ymax=1, linewidth=2, color='black')
 # call map-formatting fn
-format_map_axes(ax, bcax)
+format_map_axes(ax, bcax, add_latlon_lines=add_latlon_lines)
 # asjust spacing
-fig_0.subplots_adjust(left=0,
+fig_0.subplots_adjust(left=0.03,
                       bottom=0.075,
-                      right=1,
+                      right=0.97,
                       top=1,
                      )
 fig_0.show()
@@ -626,6 +677,9 @@ bp = ax.boxplot(x=box_vecs,
 for box, color, alpha in zip(bp['boxes'], colors, alphas):
     box.set_facecolor(color)
     box.set_alpha(alpha)
+# make median lines black
+for median in bp['medians']:
+    median.set_color('black')
 # add Xs in 'yes-NDC' columns for N. Am. and Oceania
 ax.scatter([np.mean(positions[6:8]),
             np.mean(positions[14:16])],
@@ -841,5 +895,7 @@ if save_it:
         )
     print('\n\nT-TEST OF POTENTIAL DENSITY IN AF-NDC VS. NON-AF-NDC NATIONS:\n')
     print(test)
+
+
 
 
