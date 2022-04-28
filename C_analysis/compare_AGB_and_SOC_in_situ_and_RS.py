@@ -449,9 +449,9 @@ print('\n\nPercent increase using all points: %0.2f%%\n\n' % (
 
 
 # label axes
-ax_scat.set_xlabel('$log_{10}$ published AGB density ($Mg\ C\ ha^{-1}$)',
+ax_scat.set_xlabel('published AGC density ($log_{10}\ Mg\ C\ ha^{-1}$)',
                    fontdict={'fontsize':12})
-ax_scat.set_ylabel('$log_{10}$ remotely sensed AGB density ($Mg\ C\ ha^{-1}$)',
+ax_scat.set_ylabel('remotely sensed AGC density ($log_{10}\ Mg\ C\ ha^{-1}$)',
                    fontdict={'fontsize': 12})
 # put scatterplot xaxis ticks and labels at top, and format
 #ax_scat.xaxis.tick_top()
@@ -471,6 +471,11 @@ for prac in pracs:
                     data=sub_agb_comp,
                     legend=False,
                     ax=ax_scat)
+# add a best fit line
+sns.regplot(x='card_stock_log',
+            y='whrc_stock_false0_log',
+            scatter=False,
+            data=agb_comp)
 # set tick locations and labels, axis limits
 tick_locs = [-3, -2, -1, 0, 1, 2, 3]
 tick_labs = ['0',
@@ -525,7 +530,7 @@ for prac_i, prac in enumerate(sorted_pracs):
                                                            'card_stock_log']]
     sub_soc_comp = soc_comp.loc[soc_comp['practice'] == prac, ['practice',
                                                     'card_stock_log']]
-    sub_agb_comp['pool'] = 'AGB'
+    sub_agb_comp['pool'] = 'AGC'
     sub_soc_comp['pool'] = 'SOC'
     sub_comp = pd.concat([sub_agb_comp, sub_soc_comp])
     sns.violinplot(y="practice",
@@ -545,7 +550,7 @@ for prac_i, prac in enumerate(sorted_pracs):
     sub_soc_comp_NEG['pool'] = 'SOC'
     fake_rows = sub_soc_comp_NEG.iloc[:2, :]
     fake_rows['card_stock_log_NEG'] = np.nan
-    fake_rows['pool'] = 'AGB'
+    fake_rows['pool'] = 'AGC'
     sub_comp_SOC_NEG = pd.concat([sub_soc_comp_NEG, fake_rows])
     sns.violinplot(y="practice",
                    x="card_stock_log_NEG",
@@ -596,7 +601,7 @@ for prac_i, prac in enumerate(sorted_pracs):
     ax_kde.spines['right'].set_visible(False)
     ax_kde.spines['bottom'].set_visible(False)
     ax_kde.spines['left'].set_visible(False)
-    # add black horizontal line dividing AGB and SOC
+    # add black horizontal line dividing AGC and SOC
     ax_kde.axhline(y=0, lw=1, xmin=x_ax_lims[0], xmax=x_ax_lims[1],
                    color='black', clip_on=True, alpha=1)
     # make axis box transparent (so that plots can overlap one another)
@@ -655,7 +660,7 @@ for _ in range(3):
     print('-'*80)
 print('\n\n')
 print(('\n\nStandard deviations of differences between WHRC '
-       'remotely sensed estimates and\npublished AGB '
+       'remotely sensed estimates and\npublished AGC '
        'for samples with different coordinate precisions:\n'))
 bins = ['low', 'mod', 'high']
 for prec_bin in bins:
