@@ -105,8 +105,16 @@ roe = pd.read_excel('./Roe_et_al_SI.xlsx',
                     skiprows=10)
 ndc_contrib_raw = pd.read_csv(('./NDC_contribs/pathway_mitigation_potential_and_NDC'
                                '_targets_with_ISO3.csv'))
+
 af_locs = gpd.read_file(('AF_locations_from_papers/'
                          'AF_locations_from_meta-analyses.shp'))
+                         # NOTE: I EXTRACTED NATIVE-RES CHAPMAN VALS TO
+                         # COORDINATES, BUT THEN THE VAST MAJORITY OF POINTS
+                         # ARE MISSED! I'LL USE THE 2km-AGGREGATED DATA
+                         # INSTEAD, AS POINTS MISSED EVEN BY THAT INDICATE
+                         # AREAS WITH NO VALID CHAPMAN DATA EVEN WITHIN 2km OF
+                         # PUBLISHED COORDIANTES
+                         #'chapman_AGC_at_known_AF_locs.shp'))
 
 # load the IUCN AF NDC-mentions data from 2018 report
 # (gleaned in a cleaned form from Millie Chapman's work:
@@ -289,7 +297,6 @@ potential['cont'] = get_continents(potential)
 af_locs['cont'] = get_continents(af_locs)
 
 # figure out if each location is covered by Chapman data or not
-# TODO: ACTUALLY EXTRACT VALUES FROM NATIVE-RES DATA INSTEAD!
 in_chap = []
 for i, row in af_locs.to_crs(8857).iterrows():
     lon, lat = [i[0] for i in row.geometry.coords.xy]
@@ -298,7 +305,10 @@ for i, row in af_locs.to_crs(8857).iterrows():
     chap_val = chap_vals[0]
     in_chap.append(np.invert(np.isnan(chap_val)))
 af_locs['in_chap'] = in_chap
-af_locs['in_chap_markers'] = [{True: 'o', False: 'X'}[val] for val in in_chap]
+# NOTE: FOR NOW, NOT USING THIS, BECAUSE EXTRACTION NOT WORKING ON GEE!
+#af_locs['in_chap'] = pd.notnull(af_locs['mean'])
+af_locs['in_chap_markers'] = [{True: 'o', False: 'X'}[val] for val in
+                              af_locs['in_chap']]
 
 
 # utils functions
@@ -550,8 +560,8 @@ for cont in continents.index.unique():
                                )
 # add locations
 for i, row in af_locs.to_crs(8857).iterrows():
-    ax.scatter(row.geometry.xy[0][0],
-               row.geometry.xy[1][0],
+    ax.scatter(row.geometry.centroid.xy[0][0],
+               row.geometry.centroid.xy[1][0],
                c='black',
                s=25+(25*np.invert(row['in_chap'])),
                marker=row['in_chap_markers'],
@@ -739,7 +749,7 @@ def scale_markersizes(vals, min_marksize, max_marksize, transform=None):
 
 #is current woody C density roughly correlated with GDP? HDI?
 # NOTE: GDP data from: https://data.worldbank.org/indicator/NY.GDP.MKTP.CD
-# NOTE: HDI data from: https://hdr.undp.org/en/data
+# NOTE: HDI data from: https://hdr.undp.org/en/indicators/137506
 
 
 def scale_var(var):

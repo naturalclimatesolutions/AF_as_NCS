@@ -16,8 +16,7 @@ fulldf = pd.read_excel('./Agroforestry Data Dec 2021_MERGED_METANALYSES.xlsx',
 
 # subset columns
 df = fulldf.loc[:, ['site.id', 'study.id', 'site.sitename', 'site.state',
-                    'site.country', 'lat', 'lon', 'other.reference',
-                    'sites.notes']]
+                    'site.country', 'lat', 'lon', 'other.reference']]
 
 # rename columns (GEE doesn't like periods in them)
 df.columns = [col.replace('.', '_') for col in df.columns]
