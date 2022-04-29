@@ -118,6 +118,10 @@ agb['stock'] = pd.Series(corrected_stock).astype('float')
 agb = agb.loc[:, ((agb.columns != 'stock_comm') &
                   (agb.columns != 'unit') &
                   (agb.columns != 'unit_comm'))]
+# duplicate as a 'stock_change' column (since they're effectively the same
+# idea for AGB and BGB in AF being established on untreed lands)
+agb['stock_change'] = agb['stock']
+agb['bgb_stock_change'] = agb['bgb_stock']
 # add cols in soc data missing from here
 agb['valid'] = 1
 agb['soil'] = np.nan
@@ -131,9 +135,15 @@ assert np.sum([d.endswith('/yr') for d in agb.meas_type]) == 0
 agb = agb.loc[:, agb.columns != 'meas_type']
 
 # create separate agb and bgb tables with identical sets of cols
-bgb = agb.loc[:, (agb.columns != 'stock') & (agb.columns != 'rate')]
-agb = agb.loc[:, (agb.columns != 'bgb_stock') & (agb.columns != 'bgb_rate')]
-bgb.rename(columns={'bgb_stock': 'stock', 'bgb_rate': 'rate'}, inplace=True)
+bgb = agb.loc[:, (agb.columns != 'stock') &
+                 (agb.columns != 'rate') &
+                 (agb.columns != 'stock_change')]
+agb = agb.loc[:, (agb.columns != 'bgb_stock') &
+                 (agb.columns != 'bgb_rate') &
+                 (agb.columns != 'bgb_stock_change')]
+bgb.rename(columns={'bgb_stock': 'stock',
+                    'bgb_rate': 'rate',
+                    'bgb_stock_change': 'stock_change'}, inplace=True)
 
 
 ###############
@@ -145,6 +155,8 @@ soc = soc[soc.Previous_land_use == 'Agriculture']
 
 # subtract AF SOC from control AF to get additional C
 soc['add_stock'] = soc['AFS_Stock_t_ha'] - soc['Control_Stock_t_ha']
+# and keep absolute stock data, too
+soc['stock'] = soc['AFS_Stock_t_ha']
 
 # rename cols
 soc = soc.loc[:, ['USED_BY_REMI',
@@ -161,6 +173,7 @@ soc = soc.loc[:, ['USED_BY_REMI',
                   'Age (yrs)',
                   'Depth (cm)',
                   'add_stock',
+                  'stock',
                   'SOC_Storage_rate_t_ha_yr',
                  ]]
 soc.columns = ['valid',
@@ -176,6 +189,7 @@ soc.columns = ['valid',
                'dens',
                'age_sys',
                'depth',
+               'stock_change',
                'stock',
                'rate',
               ]
@@ -216,7 +230,7 @@ all['practice'] = practice
 # (these will be used to extract woodyC stock estimates from Chapman
 #  for comparison to published estimates)
 all_agb = all[all['var'] == 'agb']
-agb_pts = all_agb.loc[:, ['lat', 'lon', 'stock', 'practice',
+agb_pts = all_agb.loc[:, ['lat', 'lon', 'stock_change', 'stock', 'practice',
                           'clim', 'age_sys', 'dens', 'meas_yr']]
 # add a unique ID, to be able to match back up to shuffled data from GEE
 np.random.seed(2)
@@ -247,14 +261,14 @@ agb_comp = pd.merge(agb_pts, agb_comp.loc[:,['ID', 'chap_stock', 'whrc_stock']],
 assert len(agb_comp) == len(agb_pts)
 
 #rename cols
-agb_comp.columns = [c if c!= 'stock' else 'card_stock' for c in agb_comp.columns]
+agb_comp.columns = [c if c not in ['stock', 'stock_change'] else 'card_'+c for c in agb_comp.columns]
 # keep only rows where Chapman or WHRC extraction were successful
 # NOTE: only about 1/4 of rows!
 agb_comp = agb_comp[(pd.notnull(agb_comp.chap_stock)) |
                     (pd.notnull(agb_comp.whrc_stock)) ]
 # get a stock-diff col
-agb_comp['stock_diff_chap'] = agb_comp['card_stock'] - agb_comp['chap_stock']
-agb_comp['stock_diff_whrc'] = agb_comp['card_stock'] - agb_comp['whrc_stock']
+agb_comp['stock_diff_chap'] = agb_comp['card_stock_change'] - agb_comp['chap_stock']
+agb_comp['stock_diff_whrc'] = agb_comp['card_stock_change'] - agb_comp['whrc_stock']
 
 # add a column indicating locations that are in WHRC data but not in Chapman
 # data
@@ -389,45 +403,31 @@ prac_colors = dict(zip(pracs, palette))
 
 # get the SOC carbon to create comparison ridgeline plot from
 soc_comp = all[all['var'] == 'soc']
-soc_comp['card_stock_log'] = np.log10(soc_comp['stock'])
-
-# make an inverse column, by generating transformed log-representations of
-# negative SOC values in order to show them in violinplot to left of 0
-soc_comp['card_stock_log_NEG'] = np.nan
-# take log10 of the absolute values for the negative stock-change values
-log_abs_neg_vals = np.log10(np.abs(
-    soc_comp[pd.isnull(soc_comp['card_stock_log'])]['stock']))
-# min-max [0-1] scale them
-scaled_log_abs_neg_vals = (log_abs_neg_vals - np.min(log_abs_neg_vals))/(
-                           np.max(log_abs_neg_vals) - np.min(log_abs_neg_vals))
-# invert their sign, multiply by max log10 of their absolute value, then
-# subtract from minimum x-axis limit of scatterplot (i.e., -1.3)
-transformed= -1.3 + (-1 * scaled_log_abs_neg_vals * np.max(log_abs_neg_vals))
-soc_comp.loc[pd.isnull(soc_comp['card_stock_log']),
-             'card_stock_log_NEG'] = transformed
+soc_comp['card_stock_change_log'] = np.log10(soc_comp['stock_change'])
 
 # make the figure
 plt.close('all')
-fig = plt.figure(figsize=(13, 10))
-# NOTE: add top scatter axes, empty axes for spacing, then all KDE axes pairs
-gs = fig.add_gridspec(2+len(pracs), 800,
-                      height_ratios=([0.2]*(len(pracs)))+[0.17]+[1])
+fig = plt.figure(figsize=(6.75, 10))
+# NOTE: add all KDE axes, an empty set of axes (to help w/ spacing), then
+#       scatter axes
+gs = fig.add_gridspec(2+len(pracs), 1,
+                      height_ratios=([0.25]*(len(pracs)))+[0.22]+[1])
 # replace true zeros with 0.001, then manually relabel the axes, to be able to
 # use log-log scale but still reflect true 0s
 agb_comp['whrc_stock_false0'] = agb_comp.whrc_stock.apply(
                                         lambda x: (x*(x>0)) + (0.001*(x==0)))
 agb_comp['whrc_stock_false0_log'] = np.log10(agb_comp['whrc_stock_false0'])
-agb_comp['card_stock_log'] = np.log10(agb_comp['card_stock'])
+agb_comp['card_stock_change_log'] = np.log10(agb_comp['card_stock_change'])
 col = 'whrc_stock_false0_log'
 dataset_label = 'WHRC et al. unpub. 2022'
 # make the scatterplot at top
-ax_scat = fig.add_subplot(gs[-1,296:])
+ax_scat = fig.add_subplot(gs[-1,:])
 ax_scat.plot([-100, 100], [-100, 100], ':k', alpha=0.3)
 # median marks (Chapman sites and all sites)
-med_log_card = np.log10(np.nanmedian(agb_comp.card_stock))
-chap_med_log_card = np.log10(np.nanmedian(agb_comp[agb_comp.in_chap].card_stock))
-med_abs_card = np.nanmedian(agb_comp.card_stock)
-chap_med_abs_card = np.nanmedian(agb_comp[agb_comp.in_chap].card_stock)
+med_log_card = np.log10(np.nanmedian(agb_comp.card_stock_change))
+chap_med_log_card = np.log10(np.nanmedian(agb_comp[agb_comp.in_chap].card_stock_change))
+med_abs_card = np.nanmedian(agb_comp.card_stock_change)
+chap_med_abs_card = np.nanmedian(agb_comp[agb_comp.in_chap].card_stock_change)
 med_log_whrc = np.log10(np.nanmedian(agb_comp.whrc_stock))
 chap_med_log_whrc = np.log10(np.nanmedian(agb_comp[agb_comp.in_chap].whrc_stock))
 med_abs_whrc = np.nanmedian(agb_comp.whrc_stock)
@@ -450,16 +450,16 @@ print('\n\nPercent increase using all points: %0.2f%%\n\n' % (
 
 # label axes
 ax_scat.set_xlabel('published AGC density ($log_{10}\ Mg\ C\ ha^{-1}$)',
-                   fontdict={'fontsize':12})
+                   fontdict={'fontsize':14})
 ax_scat.set_ylabel('remotely sensed AGC density ($log_{10}\ Mg\ C\ ha^{-1}$)',
-                   fontdict={'fontsize': 12})
+                   fontdict={'fontsize': 14})
 # put scatterplot xaxis ticks and labels at top, and format
 #ax_scat.xaxis.tick_top()
 #ax_scat.xaxis.set_label_position('top')
-ax_scat.tick_params(labelsize=9)
+ax_scat.tick_params(labelsize=10)
 for prac in pracs:
     sub_agb_comp = agb_comp[agb_comp['practice'] == prac]
-    sns.scatterplot(x='card_stock_log',
+    sns.scatterplot(x='card_stock_change_log',
                     y=col,
                     hue='practice',
                     style='in_chap',
@@ -471,11 +471,6 @@ for prac in pracs:
                     data=sub_agb_comp,
                     legend=False,
                     ax=ax_scat)
-# add a best fit line
-sns.regplot(x='card_stock_log',
-            y='whrc_stock_false0_log',
-            scatter=False,
-            data=agb_comp)
 # set tick locations and labels, axis limits
 tick_locs = [-3, -2, -1, 0, 1, 2, 3]
 tick_labs = ['0',
@@ -510,31 +505,22 @@ ax_scat.plot(ax_scat.get_xlim(), [tick_locs[0]]*2,
              ':k', linewidth=0.5, alpha=0.75, zorder=0)
 
 # get practice medians
-agb_meds = agb_comp.groupby('practice').median().loc[:,['card_stock_log']]
+agb_meds = agb_comp.groupby('practice').median().loc[:,['card_stock_change_log']]
 #agb_meds_rs = agb_comp.groupby('practice').median().loc[:,['whrc_stock_false0_log']]
-soc_meds = soc_comp.groupby('practice').median().loc[:,['card_stock_log']]
-
-soc_pos_neg_melted = soc_comp.loc[:,
-            ['practice', 'card_stock_log', 'card_stock_log_NEG']].melt(
-                id_vars=['practice'])
-soc_meds_w_neg = soc_pos_neg_melted.groupby('practice').median().loc[:,
-                                                                     ['value']]
-soc_meds_w_neg.columns = ['card_stock_log']
-sorted_pracs = agb_meds.sort_values('card_stock_log').index.values
+soc_meds = soc_comp.groupby('practice').median().loc[:,['card_stock_change_log']]
+sorted_pracs = agb_meds.sort_values('card_stock_change_log').index.values
 # plot each of the AGB and SOC KDEs
 for prac_i, prac in enumerate(sorted_pracs):
-    #ax_agb = fig.add_subplot(gs[2+(prac_i*2),0])
-    #ax_soc = fig.add_subplot(gs[3+(prac_i*2),0])
     ax_kde = fig.add_subplot(gs[prac_i, :])
     sub_agb_comp = agb_comp.loc[agb_comp['practice'] == prac, ['practice',
-                                                           'card_stock_log']]
+                                                           'card_stock_change_log']]
     sub_soc_comp = soc_comp.loc[soc_comp['practice'] == prac, ['practice',
-                                                    'card_stock_log']]
+                                                    'card_stock_change_log']]
     sub_agb_comp['pool'] = 'AGC'
     sub_soc_comp['pool'] = 'SOC'
     sub_comp = pd.concat([sub_agb_comp, sub_soc_comp])
     sns.violinplot(y="practice",
-                   x="card_stock_log",
+                   x="card_stock_change_log",
                    hue="pool",
                    data=sub_comp,
                    palette=[prac_colors[prac]]*2,
@@ -544,27 +530,6 @@ for prac_i, prac in enumerate(sorted_pracs):
                    legend=False,
                    ax=ax_kde,
                    clip_on=False)
-    # add a lower KDE for the negative stock-change SOC values
-    sub_soc_comp_NEG = soc_comp.loc[soc_comp['practice'] == prac, ['practice',
-                                                    'card_stock_log_NEG']]
-    sub_soc_comp_NEG['pool'] = 'SOC'
-    fake_rows = sub_soc_comp_NEG.iloc[:2, :]
-    fake_rows['card_stock_log_NEG'] = np.nan
-    fake_rows['pool'] = 'AGC'
-    sub_comp_SOC_NEG = pd.concat([sub_soc_comp_NEG, fake_rows])
-    sns.violinplot(y="practice",
-                   x="card_stock_log_NEG",
-                   hue="pool",
-                   data=sub_comp_SOC_NEG,
-                   palette=[prac_colors[prac]]*2,
-                   split=True,
-                   #inner=None,
-                   inner='stick',
-                   legend=False,
-                   ax=ax_kde,
-                   cut=0,
-                   clip_on=False)
-
 
     # make violins transparent
     for n, violin in enumerate(ax_kde.collections):
@@ -572,27 +537,48 @@ for prac_i, prac in enumerate(sorted_pracs):
             violin.set_alpha(0.75)
         else:
             violin.set_alpha(0.25)
+
+    # drop legend
     ax_kde.legend().remove()
+
     # add medians
-    agb_med = agb_meds.loc[prac, 'card_stock_log']
+    agb_med = agb_meds.loc[prac, 'card_stock_change_log']
     #agb_med_rs = agb_meds_rs.loc[prac, 'whrc_stock_false0_log']
-    soc_med = soc_meds.loc[prac, 'card_stock_log']
-    soc_med_w_neg = soc_meds_w_neg.loc[prac, 'card_stock_log']
+    soc_med = soc_meds.loc[prac, 'card_stock_change_log']
     ax_kde.plot([agb_med]*2, [0, -0.1], color='black', linewidth=1.5, alpha=0.75)
     ax_kde.plot([soc_med]*2, [0, 0.1], color='black', linewidth=1.5, alpha=0.35)
-    ax_kde.plot([soc_med_w_neg]*2, [0, 0.1], color='red', linewidth=1.5, alpha=0.35)
 
     # label AF practice
-    ax_kde.text(1.25*x_ax_lims[1], -0.15, prac, fontweight='bold', fontsize=17,
+    ax_kde.text(0.98*x_ax_lims[0], -0.28, prac, fontweight='bold', fontsize=16,
                 color=prac_colors[prac], clip_on=False)
-    # add horiz lines for each plot
-    ax_kde.axhline(y=0, lw=2, xmin=x_ax_lims[0], xmax=x_ax_lims[1],
-               color=prac_colors[prac], clip_on=True, alpha=0.4)
     ax_kde.set_ylim((0.8, -0.8)) #NOTE: lims inverted bc violinplot inverts y ax
-    #ax_kde.set_xlim(x_ax_lims)
-    ax_kde.set_xlim(-5, 5)
-    # add vertical lines to visually line up kde axes with scatter axes
-    ax_kde.plot([x_ax_lims[0]]*2, [0,2], color='black', linewidth=0.75)
+    ax_kde.set_xlim(x_ax_lims)
+    # add vertical lines to visually line up kde axes with scatter axes,
+    # and a horizontal line on the top axes, to close off the 'box'
+    ax_kde.plot([x_ax_lims[0]]*2, [-0.8,2], color='black', linewidth=0.75,
+                clip_on=False)
+    ax_kde.plot([x_ax_lims[1]]*2, [-0.8,2], color='black', linewidth=0.75,
+                clip_on=False)
+    if prac_i == 0:
+        ax_kde.plot(x_ax_lims, [-0.8]*2, color='black', linewidth=0.75,
+                    clip_on=False)
+
+    # add counts of positive AGB and SOC values
+    # (and count of negative SOC values)
+    # NOTE: I CHECKED AND THERE ARE NO AGB OR SOC STOCK-CHANGE VALUES == 0
+    # NOTE: this automatically drops NAs too (I checked)
+    agb_ct = np.sum(agb_comp[agb_comp['practice'] == prac]['card_stock_change']>0)
+    soc_ct = np.sum(soc_comp[soc_comp['practice'] == prac]['stock_change']>0)
+    soc_ct_neg = np.sum(soc_comp[soc_comp['practice'] == prac]['stock_change']<0)
+    ax_kde.text(0.985*ax_kde.get_xlim()[0], -0.09, '%i' % agb_ct,
+                fontdict={'fontsize':9,})
+    ax_kde.text(0.985*ax_kde.get_xlim()[0], 0.2, '%i' % soc_ct, alpha=0.5,
+                fontdict={'fontsize':9,})
+    ax_kde.text((1.11 + (0.04*(soc_ct_neg>10)))*ax_kde.get_xlim()[0], 0.2,
+                '(%i)' % soc_ct_neg, alpha=0.5,
+                fontdict={'fontsize':9})
+
+    # get rid of ticks and spines
     ax_kde.set_xticks(())
     ax_kde.set_yticks(())
     ax_kde.set_xlabel('')
@@ -601,12 +587,15 @@ for prac_i, prac in enumerate(sorted_pracs):
     ax_kde.spines['right'].set_visible(False)
     ax_kde.spines['bottom'].set_visible(False)
     ax_kde.spines['left'].set_visible(False)
+    # add horiz lines for each plot
+    ax_kde.axhline(y=0, lw=3, xmin=x_ax_lims[0], xmax=x_ax_lims[1],
+               color=prac_colors[prac], clip_on=True, alpha=0.4)
     # add black horizontal line dividing AGC and SOC
-    ax_kde.axhline(y=0, lw=1, xmin=x_ax_lims[0], xmax=x_ax_lims[1],
-                   color='black', clip_on=True, alpha=1)
+    ax_kde.plot([1.13*x_ax_lims[0], x_ax_lims[1]], [0,0],
+                color='black', linewidth=1, clip_on=False, alpha=1)
     # make axis box transparent (so that plots can overlap one another)
     ax_kde.set(facecolor='none')
-fig.subplots_adjust(left=0.15, right=0.86, bottom=0.08, top=0.99,
+fig.subplots_adjust(left=0.11, right=0.97, bottom=0.08, top=0.99,
                     wspace=0, hspace=-0.35)
 fig.savefig('C_density_pub_rs_comp_plot.png', dpi=700)
 fig.show()
