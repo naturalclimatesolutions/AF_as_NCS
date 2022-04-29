@@ -449,9 +449,9 @@ print('\n\nPercent increase using all points: %0.2f%%\n\n' % (
 
 
 # label axes
-ax_scat.set_xlabel('published AGC density ($log_{10}\ Mg\ C\ ha^{-1}$)',
+ax_scat.set_xlabel('published AGC density\n($log_{10}\ Mg\ C\ ha^{-1}$)',
                    fontdict={'fontsize':14})
-ax_scat.set_ylabel('remotely sensed AGC density ($log_{10}\ Mg\ C\ ha^{-1}$)',
+ax_scat.set_ylabel('remotely sensed AGC density\n($log_{10}\ Mg\ C\ ha^{-1}$)',
                    fontdict={'fontsize': 14})
 # put scatterplot xaxis ticks and labels at top, and format
 #ax_scat.xaxis.tick_top()
@@ -488,6 +488,9 @@ ax_scat.set_xticks(x_tick_locs, x_tick_labs)
 ax_scat.set_yticks(tick_locs, tick_labs)
 ax_scat.set_xlim(x_ax_lims)
 ax_scat.set_ylim(ax_lims)
+# add label for figure part 'B'
+ax_scat.text(1.6*ax_scat.get_xlim()[0], 0.85*ax_scat.get_ylim()[1], 'B.',
+             size=24, weight='bold', color='black', clip_on=False)
 
 # add broken-stick indicator
 tick_locs_spacing = np.diff(tick_locs[:2])[0]
@@ -505,10 +508,10 @@ ax_scat.plot(ax_scat.get_xlim(), [tick_locs[0]]*2,
              ':k', linewidth=0.5, alpha=0.75, zorder=0)
 
 # get practice medians
-agb_meds = agb_comp.groupby('practice').median().loc[:,['card_stock_change_log']]
+agb_meds = np.log10(agb_comp.groupby('practice').median().loc[:,['card_stock_change']])
 #agb_meds_rs = agb_comp.groupby('practice').median().loc[:,['whrc_stock_false0_log']]
-soc_meds = soc_comp.groupby('practice').median().loc[:,['card_stock_change_log']]
-sorted_pracs = agb_meds.sort_values('card_stock_change_log').index.values
+soc_meds = np.log10(soc_comp[soc_comp['stock_change']>0].groupby('practice').median().loc[:,['stock_change']])
+sorted_pracs = agb_meds.sort_values('card_stock_change').index.values
 # plot each of the AGB and SOC KDEs
 for prac_i, prac in enumerate(sorted_pracs):
     ax_kde = fig.add_subplot(gs[prac_i, :])
@@ -542,11 +545,15 @@ for prac_i, prac in enumerate(sorted_pracs):
     ax_kde.legend().remove()
 
     # add medians
-    agb_med = agb_meds.loc[prac, 'card_stock_change_log']
+    agb_med = agb_meds.loc[prac, 'card_stock_change']
     #agb_med_rs = agb_meds_rs.loc[prac, 'whrc_stock_false0_log']
-    soc_med = soc_meds.loc[prac, 'card_stock_change_log']
+    soc_med = soc_meds.loc[prac, 'stock_change']
     ax_kde.plot([agb_med]*2, [0, -0.1], color='black', linewidth=1.5, alpha=0.75)
     ax_kde.plot([soc_med]*2, [0, 0.1], color='black', linewidth=1.5, alpha=0.35)
+    # add SOC median including negative values, as a red tick
+    soc_med_neg = np.log10(np.nanmedian(soc_comp[soc_comp['practice'] ==
+                                                 prac]['stock_change']))
+    ax_kde.plot([soc_med_neg]*2, [0, 0.1], color='red', linewidth=1.5, alpha=0.35)
 
     # label AF practice
     ax_kde.text(0.98*x_ax_lims[0], -0.28, prac, fontweight='bold', fontsize=16,
@@ -572,11 +579,10 @@ for prac_i, prac in enumerate(sorted_pracs):
     soc_ct_neg = np.sum(soc_comp[soc_comp['practice'] == prac]['stock_change']<0)
     ax_kde.text(0.985*ax_kde.get_xlim()[0], -0.09, '%i' % agb_ct,
                 fontdict={'fontsize':9,})
-    ax_kde.text(0.985*ax_kde.get_xlim()[0], 0.2, '%i' % soc_ct, alpha=0.5,
+    ax_kde.text(0.985*ax_kde.get_xlim()[0], 0.2, '%i' % soc_ct,
                 fontdict={'fontsize':9,})
-    ax_kde.text((1.11 + (0.04*(soc_ct_neg>10)))*ax_kde.get_xlim()[0], 0.2,
-                '(%i)' % soc_ct_neg, alpha=0.5,
-                fontdict={'fontsize':9})
+    ax_kde.text((1.06 + (0.04*(soc_ct_neg>10)))*ax_kde.get_xlim()[0], 0.2,
+                '%i' % soc_ct_neg, fontdict={'fontsize':9, 'color':'red'})
 
     # get rid of ticks and spines
     ax_kde.set_xticks(())
@@ -591,11 +597,15 @@ for prac_i, prac in enumerate(sorted_pracs):
     ax_kde.axhline(y=0, lw=3, xmin=x_ax_lims[0], xmax=x_ax_lims[1],
                color=prac_colors[prac], clip_on=True, alpha=0.4)
     # add black horizontal line dividing AGC and SOC
-    ax_kde.plot([1.13*x_ax_lims[0], x_ax_lims[1]], [0,0],
+    ax_kde.plot([1.08*x_ax_lims[0], x_ax_lims[1]], [0,0],
                 color='black', linewidth=1, clip_on=False, alpha=1)
     # make axis box transparent (so that plots can overlap one another)
     ax_kde.set(facecolor='none')
-fig.subplots_adjust(left=0.11, right=0.97, bottom=0.08, top=0.99,
+    # add label for figure part 'A' (if this is the top KDE axis)
+    if prac_i == 0:
+        ax_kde.text(1.6*ax_kde.get_xlim()[0], -0.25, 'A.',
+                    size=24, weight='bold', color='black', clip_on=False)
+fig.subplots_adjust(left=0.18, right=0.97, bottom=0.08, top=0.99,
                     wspace=0, hspace=-0.35)
 fig.savefig('C_density_pub_rs_comp_plot.png', dpi=700)
 fig.show()
