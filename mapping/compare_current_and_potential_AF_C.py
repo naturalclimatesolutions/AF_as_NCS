@@ -60,41 +60,6 @@ savefig=True
 x_buff=max_x/20
 savefig=True
 
-# TODO:
-
-    # replace my Chapman data with her original
-        # read in:
-            # decide if need sep crop and pasture maps or all combined okay
-            # produce pair(s?) of current and potential maps
-
-    # look into Brandt images
-
-    # reread Sam's meeting notes and decide if any other maps needed
-
-    # reach out to Sam and Susan with update
-        # tell Sam about possibility of extracting NDC info later on,
-        # but currently plugging in countries from IUCN 2018 (from Chapman)
-
-    # put maps in draft fig, ping group for review
-
-    # read Damien papers some more
-
-    # reply to Damien email
-
-    # rework co-benefits section a touch
-        # private vs public, and private benefits main reasons for AF adoption
-        # and maintenance
-
-        # context dependence (need for local knowledge, research, extension)
-
-        # trade-offs possible --> no hype! farmers need comprehensive info
-
-    # look at AF survey results thus far
-
-    # follow up with Susan to schedule C fig brainstorm
-
-    # continue reworking text
-
 
 # load datasets
 rosenstock = gpd.read_file(('./rosenstock_et_al_2019_data/'
@@ -212,8 +177,8 @@ for country in ['Haiti', 'Dominican Rep.', 'Bahamas',
 continents = countries.dissolve('continent')
 # shorten continent names
 continents.index = ['Africa', 'Antarctica', 'Asia',
-                    'Europe', 'N. America', 'Oceania',
-                    'C. & S. America\n& Caribbean']
+                    'Europe', 'N. Amer.', 'Oceania',
+                    'C. & S. Amer.\n& Carib.']
 
 # set continents' color palette
 cont_palette = [sns.color_palette('bright')[i] for i in [4,8,6,9,3,1]]
@@ -301,15 +266,16 @@ af_locs['cont'] = get_continents(af_locs)
 
 # figure out if each location is covered by Chapman data or not
 in_chap = []
+chap_val_list = []
 for i, row in af_locs.to_crs(8857).iterrows():
     lon, lat = [i[0] for i in row.geometry.coords.xy]
     chap_vals = chap_rast.sel(x=lon, y=lat, method='nearest').values
     assert chap_vals.size == 1
     chap_val = chap_vals[0]
+    chap_val_list.append(chap_val)
     in_chap.append(np.invert(np.isnan(chap_val)))
+af_locs['chap_val'] = chap_val_list
 af_locs['in_chap'] = in_chap
-# NOTE: FOR NOW, NOT USING THIS, BECAUSE EXTRACTION NOT WORKING ON GEE!
-#af_locs['in_chap'] = pd.notnull(af_locs['mean'])
 af_locs['in_chap_markers'] = [{True: 'o', False: 'X'}[val] for val in
                               af_locs['in_chap']]
 
@@ -575,6 +541,15 @@ if make_map:
                    zorder=3,
                   )
 
+    # print % of sites falling within Chapman data, and % of those falling
+    # within 'agroforestry' pixels
+    pct_in_chap = 100*np.sum(af_locs['in_chap'])/len(af_locs)
+    pct_in_chap_in_af = 100*np.mean(af_locs['chap_val'][af_locs['in_chap']]>=5)
+    print(('\n\n%0.2f%% OF ALL STUDIES FALL WITHIN CHAPMAN DATA, '
+           'AND %0.2f%% OF THOSE FALL WITHIN CHAPMAN \'AGROFORESTRY\''
+           ' PIXELS (i.e., PIXELS >= 5 Mg C ha^-1\n\n') %
+          (pct_in_chap, pct_in_chap_in_af))
+
     # fix the colorbar and set ticks and labels
     patches_0to5 = [Rectangle(xy=(0, 0), width=5, height=1)]
     p = PatchCollection(patches_0to5, alpha=1, color=soil_color, zorder=0)
@@ -617,9 +592,9 @@ if make_plots:
     # get names of countries in nth quantile for total feasible mitigation by 2050
 
 
-    fig_1 = plt.figure(figsize=(16,8.3))
-    gs = fig_1.add_gridspec(100, 2, width_ratios=[1, 0.8])
-    ax0 = fig_1.add_subplot(gs[:,0])
+    fig_1 = plt.figure(figsize=(2*3.5,2*6.5))
+    gs = fig_1.add_gridspec(2, 100, height_ratios=[0.85, 1.1])
+    ax0 = fig_1.add_subplot(gs[0,:])
     cont_tot_width = 1.4
     space_curr_potent = 0.05
     space_NDC_no_yes = 0.1
@@ -676,7 +651,7 @@ if make_plots:
     # add Xs in 'yes-NDC' columns for N. Am. and Oceania
     ax0.scatter([np.mean(positions[6:8]),
                 np.mean(positions[14:16])],
-               [0,0],
+               [1,1],
                marker='x',
                color='black',
                s=200,
@@ -694,7 +669,7 @@ if make_plots:
     ymin, ymax = ax0.get_ylim()
     patches=[]
     for val in [p-(box_width/2)-(space_cont/2) for p in positions[::4]]:
-        ax0.axvline(val, ymin, ymax, linestyle='-', color='black', linewidth=1.5)
+        ax0.axvline(val, ymin, ymax, linestyle='-', color='black', linewidth=2.5)
         ax0.axvline(val+(0.5*cont_tot_width), ymin, ymax, linestyle='-',
                        color='black', linewidth=0.5)
         patch = Rectangle(xy=(val, ax0.get_ylim()[0]),
@@ -702,18 +677,21 @@ if make_plots:
                           height=np.diff(ax0.get_ylim()),
                          )
         patches.append(patch)
+    # also add bold black line at far right
+    ax0.axvline(ax0.get_xlim()[1], ymin, ymax, linestyle='-', color='black', linewidth=2.5)
     p = PatchCollection(patches, alpha=0.1, color='black', zorder=0)
     ax0.add_collection(p)
     ax0.set_xlim(positions[0]-(box_width/2)-(space_cont/2),
                 positions[-1]+(box_width/2)+(space_cont/2))
     ax0.set_xticks([p+(box_width/2)+(space_NDC_no_yes/2) for p in positions[1::4]],
                   conts)
-    ax0.tick_params(labelsize=10)
-    ax0.set_xlabel('continent', fontdict={'fontsize':15})
-    ax0.set_ylabel('woody C density ($Mg\ C\ ha^{-1}$)', fontdict={'fontsize':15})
+    ax0.tick_params(labelsize=11)
+    ax0.set_xlabel('continent', fontdict={'fontsize':16})
+    ax0.set_ylabel('woody C density\n($Mg\ C\ ha^{-1}$)',
+                   fontdict={'fontsize':16})
 
     # add label for part 'A' of figure
-    ax0.text(-0.18, 43.5, 'A.', size=24, weight='bold', clip_on=False)
+    ax0.text(-1.5, 44.7, 'A.', size=24, weight='bold', clip_on=False)
 
 
     # t-test of significant diff between NDC and non-NDC groups
@@ -762,7 +740,7 @@ if make_plots:
     data_w_hdi = pd.merge(data_for_figs, hdi.loc[:, ['Country Code', '2000']],
                           left_on='ISO_A3', right_on='Country Code')
     data_w_hdi['hdi'] = data_w_hdi['2000']
-    ax1 = fig_1.add_subplot(gs[18:,1])
+    ax1 = fig_1.add_subplot(gs[1, :])
     #data_w_gdp['log_gdp'] = np.log(data_w_gdp['2000'])
     data_w_hdi['log_dens'] = np.log(data_w_hdi['wt_avg_density'])
     sizes = scale_markersizes(data_w_hdi['agrofor_feascum'],
@@ -778,8 +756,10 @@ if make_plots:
     sns.regplot(x='hdi', y='log_dens', data=data_w_hdi, ax=ax1, scatter=False)
     data_for_test = data_w_hdi.loc[:, ['hdi', 'log_dens']].dropna(how='any')
     r, p = stats.pearsonr(data_for_test['hdi'], data_for_test['log_dens'])
-    ax1.text(0.26, -5.8, '$R^2=%0.2f$' % r**2, color='red', fontstyle='italic')
-    ax1.text(0.26, -6.1, '$p\leq%0.4f$' % p, color='red', fontstyle='italic')
+    ax1.text(0.865, -5.6, '$R^2=%0.2f$' % r**2, color='red',
+             fontstyle='italic', size=13)
+    ax1.text(0.865, -6.0, '$p\leq%0.4f$' % p, color='red', fontstyle='italic',
+            size=13)
     for i, row in data_w_hdi.iterrows():
         country = row['NAME_EN']
         # manually shorten some countries
@@ -793,18 +773,22 @@ if make_plots:
             #        color='gray', rotation=0, size=9)
             pass
         if row['agrofor_feascum'] > np.nanpercentile(data_w_hdi['agrofor_feascum'],
-                                                     90):
+                                                     95):
+            if country not in ['Thailand', 'Iran']:
+                rotation = 20
+            else:
+                rotation = 0
             ax1.text(row['hdi'], row['log_dens'], country,
-                    color='black', weight='demibold', rotation=0, size=9)
-    ax1.set_xlabel('human development index (HDI; yr. 2000)',
-                  fontdict={'fontsize': 15})
-    ax1.set_ylabel('log average ag. AGC density (yr. 2000)',
-                  fontdict={'fontsize': 15})
-    ax1.set_xlim(0.25, 0.98)
+                    color='black', weight='bold', rotation=rotation, size=10)
+    ax1.set_xlabel('human development index (HDI)',
+                  fontdict={'fontsize': 16})
+    ax1.set_ylabel('average AGC density\n$ln(Mg\ C\ ha^{-1})$',
+                  fontdict={'fontsize': 16})
+    ax1.set_xlim(0.25, 1.0)
     ax1.set_ylim(-6.2, 3)
-    ax1.tick_params(labelsize=10)
+    ax1.tick_params(labelsize=11)
 
-    # custom legend at the side
+    # custom legend
     feascum_data = data_w_hdi['agrofor_feascum']
     vals = np.linspace(np.quantile(np.sqrt(feascum_data), 0.05),
                        np.quantile(np.sqrt(feascum_data), 0.95), 4)**2
@@ -848,7 +832,7 @@ if make_plots:
 
     lgd = ax1.legend(handles=legend_elements,
                     loc='upper center',
-                    bbox_to_anchor=(0.35, 1.02, 0.3, 0.22),
+                    bbox_to_anchor=(0.4, 1.1, 0.18, 0.15),
                     prop={'size': 12},
                     title=lgd_title,
                     title_fontproperties={'weight': 'bold',
@@ -859,14 +843,14 @@ if make_plots:
                    )
 
     # add label for part 'B' of figure
-    ax1.text(0.20, 5.5, 'B.', size=24, weight='bold', clip_on=False)
+    ax1.text(0.12, 4.5, 'B.', size=24, weight='bold', clip_on=False)
 
 
-    fig_1.subplots_adjust(left=0.04,
-                          bottom=0.08,
-                          right=0.98,
-                          top=0.9,
-                          wspace=0.2
+    fig_1.subplots_adjust(left=0.15,
+                          bottom=0.07,
+                          right=0.94,
+                          top=0.95,
+                          hspace=0.6
                          )
 
     fig_1.show()

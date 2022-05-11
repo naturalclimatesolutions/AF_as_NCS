@@ -14,13 +14,6 @@ from latlon_utils import get_climate
 import re, os
 
 
-# TODO:
-    # okay to use log axes even though zeros and neg values lost??
-
-
-
-USE_ALL_DATA = False
-
 
 ###############################################
 # load data
@@ -30,23 +23,9 @@ agb = pd.read_excel(('./Cardinael_et_al_2018_ERL_Database_AFS_Biomass'
                      '_DETH_MEAS_YR_ADDED.xlsx'))
 soc = pd.read_excel('./Cardinael_et_al_2018_ERL_Database_AFS_SOC_DETH_EDIT.xlsx')
 
-if USE_ALL_DATA:
-    # read in data merged from all meta-analyses
-    p = pd.read_excel('./Agroforestry Data Dec 2021_MERGED_METANALYSES.xlsx',
-                    sheet_name='S1 literature')
-    s = pd.read_excel('./Agroforestry Data Dec 2021_MERGED_METANALYSES.xlsx',
-                    sheet_name='S2 sites')
-    m = pd.read_excel('./Agroforestry Data Dec 2021_MERGED_METANALYSES.xlsx',
-                    sheet_name='S3 measurements')
-
-
 ###############################################
 # pre-processing
 ###############################################
-
-############################
-# pre-process Cardinael data
-
 
 ###############
 # prep agb data
@@ -79,7 +58,6 @@ agb = agb[[not ref.startswith('Adesina') for ref in agb['Full Technical Referenc
 agb = agb[[not ref.startswith('Bright') for ref in agb['Full Technical Reference']]]
 agb = agb[[not ref.startswith('Diels') for ref in agb['Full Technical Reference']]]
 rows_af = len(agb)
-rows_dropped = rows_b4 - rows_af
 
 
 agb.columns = ['meas_type',
@@ -239,33 +217,42 @@ assert len(set(agb_pts['ID'])) == len(agb_pts)
 agb_pts = gpd.GeoDataFrame(agb_pts, geometry=gpd.points_from_xy(agb_pts.lon,
                                                                 agb_pts.lat))
 # export to file
-#agb_pts.to_file('agb_pts.shp')
-#agb_pts = gpd.read_file('agb_pts.shp')
+#agb_pts.to_file('agb_pts_from_cardinael_2018.shp')
+#agb_pts = gpd.read_file('agb_pts_from_cardinael_2018.shp')
 
 # read in the points after Chapman data has been merged onto them,
 # for AGB estimate comparison
 agb_comp_chap = gpd.read_file('./agb_pts_from_cardinael_2018_chapman_extract.shp')
 agb_comp_chap = agb_comp_chap.rename({'mean': 'chap_stock'}, axis=1)
-assert len(agb_comp_chap) == (len(agb_pts) + rows_dropped)
+# NOTE: CORRECT FOR FACT THAT I ESTIMATED AGC FROM AGB USING 0.5 C/BIOMASS
+# RATIO (BEFORE EXPORTING FROM GEE), BUT CARDINAEL ET AL. 2018 USED 0.47
+agb_comp_chap['chap_stock'] = agb_comp_chap['chap_stock']*2*0.47
 
 agb_comp_whrc = gpd.read_file('./agb_pts_from_cardinael_2018_whrc_extract.shp')
 agb_comp_whrc = agb_comp_whrc.rename({'mean': 'whrc_stock'}, axis=1)
-assert len(agb_comp_whrc) == (len(agb_pts) + rows_dropped)
+# NOTE: CORRECT FOR FACT THAT I ESTIMATED AGC FROM AGB USING 0.5 C/BIOMASS
+# RATIO (BEFORE EXPORTING FROM GEE), BUT CARDINAEL ET AL. 2018 USED 0.47
+agb_comp_whrc['whrc_stock'] = agb_comp_whrc['whrc_stock']*2*0.47
 agb_comp_whrc_sub = agb_comp_whrc.loc[:, ['ID', 'whrc_stock']]
 
+# merge Chapman and WHRC extracte datasets together
 agb_comp = pd.merge(agb_comp_chap, agb_comp_whrc_sub, on='ID', how='left')
-
 assert len(agb_comp) == len(agb_comp_chap) == len(agb_comp_whrc_sub)
+
+# merge just the extracted values onto the originally output points
+# (that were fed into GEE for extraction)
 agb_comp = pd.merge(agb_pts, agb_comp.loc[:,['ID', 'chap_stock', 'whrc_stock']],
                     on='ID', how='inner')
+print('LENGTH agb_comp AF pts MERGE: %i' % len(agb_comp))
 assert len(agb_comp) == len(agb_pts)
 
 #rename cols
 agb_comp.columns = [c if c not in ['stock', 'stock_change'] else 'card_'+c for c in agb_comp.columns]
+
 # keep only rows where Chapman or WHRC extraction were successful
-# NOTE: only about 1/4 of rows!
 agb_comp = agb_comp[(pd.notnull(agb_comp.chap_stock)) |
                     (pd.notnull(agb_comp.whrc_stock)) ]
+
 # get a stock-diff col
 agb_comp['stock_diff_chap'] = agb_comp['card_stock_change'] - agb_comp['chap_stock']
 agb_comp['stock_diff_whrc'] = agb_comp['card_stock_change'] - agb_comp['whrc_stock']
@@ -274,114 +261,6 @@ agb_comp['stock_diff_whrc'] = agb_comp['card_stock_change'] - agb_comp['whrc_sto
 # data
 agb_comp['in_chap'] = ((pd.notnull(agb_comp['whrc_stock'])) &
                        (pd.notnull(agb_comp['chap_stock'])))
-
-
-#############################
-# pre-process all merged data
-if USE_ALL_DATA:
-    m['site.id'] = m['site.ID']
-    m['density'] = [float(d) if (pd.notnull(d) and  re.search('^\d+\.?\d*$',
-                                        str(d))) else np.nan for d in m['density']]
-    m['density'] = [float(d) for d in m['density']]
-    dens_pctiles = np.nanpercentile(m['density'], [20, 40, 60, 80,])
-    age_pctiles = np.nanpercentile(m['stand.age'], [20, 40, 60, 80,])
-    cat_strs = {0: 'X < 20th',
-                1: '20th < X < 40th',
-                2: '40th < X < 60th' ,
-                3: '60th < X < 80th',
-                4: 'X > 80th',
-               }
-    dens_cats = []
-    age_cats = []
-    means = []
-    for i, row in m.iterrows():
-        if pd.isnull(row['density']):
-            dens_cats.append(np.nan)
-        else:
-            dens_cat_num = sum(row['density']>dens_pctiles)
-            dens_cats.append(cat_strs[dens_cat_num])
-        if pd.isnull(row['stand.age']):
-            age_cats.append(np.nan)
-        else:
-            age_cat_num = sum(row['stand.age']>age_pctiles)
-            age_cats.append(cat_strs[age_cat_num])
-        if pd.isnull(row['mean']):
-            means.append(np.nan)
-        elif isinstance(row['mean'], str):
-            try:
-                if re.search('\-\+', row['mean']):
-                    mean_val = float(row['mean'].split('-+')[0])
-                elif re.search('\+\-', row['mean']):
-                    mean_val = float(row['mean'].split('+-')[0])
-                elif re.search('\d to \d', row['mean']):
-                    mean_val = float(row['mean'].split(' to ')[0])
-                elif row['mean'] == 'n.a.':
-                    mean_val = np.nan
-                else:
-                    mean_val = np.mean([float(s) for s in row['mean'].split('-')])
-                means.append(mean_val)
-            except Exception as e:
-                print(row['mean'])
-                print(e)
-                means.append(np.nan)
-        else:
-            means.append(row['mean'])
-    m['density_cat'] = pd.Series(dens_cats).astype('category')
-    m['age_cat'] = pd.Series(age_cats).astype('category')
-    m['mean'] = pd.Series(means).astype('float')
-
-    # subset to cols of interest
-    p = p.loc[:, ['study.id',
-                  'citations.author',
-                  'citations.year',
-                  'Cardinael 2018',
-                  'DeStefano 2018',
-                  'Feliciano 2018',
-                  'Kim 2016',
-                  'Shi 2018',
-                  'Ma 2020',
-                  'Drexler 2021',
-                  'Hubner 2021',
-                  'Mayer 2021',
-                 ]]
-    s = s.loc[:, ['site.id',
-                  'study.id',
-                  'site.country',
-                  'lat',
-                  'lon',
-                  'masl',
-                  'map',
-                  'mat',
-                 ]]
-    m = m.loc[:, ['site.id',
-                  'plot.id',
-                  'measurement.ID',
-                  'prior',
-                  'refor.type',
-                  'system.age',
-                  'stand.age',
-                  'variable.name',
-                  'mean',
-                  'lower95CI',
-                  'upper95CI',
-                  'se',
-                  'sd',
-                  'density',
-                  'density_cat',
-                  'age_cat',
-                 ]]
-
-    # reconcile into single table for analysis
-    db = pd.merge(pd.merge(m, s, on='site.id', how='left'),
-                      p, on='study.id', how='left')
-
-    # add single column indicating if each measurement comes from a meta-anal study
-    db['in_meta'] = np.sum(db.iloc[:, 25:], axis=1)>1
-
-    # subset for only Cardinael et al. 2018 data (highest-quality meta-analysis)
-    db = db[[str(i).startswith('c') for i in db['study.id']]]
-
-
 
 
 ##########################################
@@ -415,7 +294,7 @@ gs = fig.add_gridspec(2+len(pracs), 1,
 # replace true zeros with 0.001, then manually relabel the axes, to be able to
 # use log-log scale but still reflect true 0s
 agb_comp['whrc_stock_false0'] = agb_comp.whrc_stock.apply(
-                                        lambda x: (x*(x>0)) + (0.001*(x==0)))
+                                        lambda x: (x*(x>0)) + (0.01*(x==0)))
 agb_comp['whrc_stock_false0_log'] = np.log10(agb_comp['whrc_stock_false0'])
 agb_comp['card_stock_change_log'] = np.log10(agb_comp['card_stock_change'])
 col = 'whrc_stock_false0_log'
@@ -440,16 +319,16 @@ ax_scat.scatter([chap_med_log_card], [chap_med_log_whrc], marker='o', s=90,
 # print medians
 print('\n\nMedian in situ: only Chapman-covered points: %0.2f\n\n' % chap_med_abs_card)
 print('\n\nMedian in situ: all points: %0.2f\n\n' % med_abs_card)
-print('\n\nPercent increase using all points: %0.2f%%\n\n' % (
-                    100 * ((med_abs_card - chap_med_abs_card)/chap_med_abs_card)))
+print('\n\nPercent decrease using all points: %0.2f%%\n\n' % (
+                    100 * ((med_abs_card - chap_med_abs_card)/med_abs_card)))
 print('\n\nMedian remote sensing: only Chapman-covered points: %0.2f\n\n' % chap_med_abs_whrc)
 print('\n\nMedian remote sensing: all points: %0.2f\n\n' % med_abs_whrc)
-print('\n\nPercent increase using all points: %0.2f%%\n\n' % (
-                    100 * ((med_abs_whrc - chap_med_abs_whrc)/chap_med_abs_whrc)))
+print('\n\nPercent decrease using all points: %0.2f%%\n\n' % (
+                    100 * ((med_abs_whrc - chap_med_abs_whrc)/med_abs_whrc)))
 
 
 # label axes
-ax_scat.set_xlabel('published AGC density\n($log_{10}\ Mg\ C\ ha^{-1}$)',
+ax_scat.set_xlabel('published C density\n($log_{10}\ Mg\ C\ ha^{-1}$)',
                    fontdict={'fontsize':14})
 ax_scat.set_ylabel('remotely sensed AGC density\n($log_{10}\ Mg\ C\ ha^{-1}$)',
                    fontdict={'fontsize': 14})
@@ -457,6 +336,7 @@ ax_scat.set_ylabel('remotely sensed AGC density\n($log_{10}\ Mg\ C\ ha^{-1}$)',
 #ax_scat.xaxis.tick_top()
 #ax_scat.xaxis.set_label_position('top')
 ax_scat.tick_params(labelsize=10)
+total_n_pts = 0
 for prac in pracs:
     sub_agb_comp = agb_comp[agb_comp['practice'] == prac]
     sns.scatterplot(x='card_stock_change_log',
@@ -471,18 +351,20 @@ for prac in pracs:
                     data=sub_agb_comp,
                     legend=False,
                     ax=ax_scat)
+    total_n_pts += len(sub_agb_comp)
+print('\n\n%i POINTS SCATTERED IN TOTAL\n\n' % total_n_pts)
 # set tick locations and labels, axis limits
-tick_locs = [-3, -2, -1, 0, 1, 2, 3]
-tick_labs = ['0',
-             '$10^{-2}$',
-             '$10^{-1}$',
-             '$10^{0}$',
-             '$10^{1}$',
-             '$10^{2}$',
-             '$10^{3}$']
-x_tick_locs = tick_locs[2:]
-x_tick_labs = tick_labs[2:]
-ax_lims = (-3.1, 2.5)
+tick_locs = [-2, -1, 0, 1, 2, 3]
+tick_labs = ['∅',
+             '-1',
+             '0',
+             '1',
+             '2',
+             '3',
+            ]
+x_tick_locs = tick_locs[1:]
+x_tick_labs = tick_labs[1:]
+ax_lims = (-2.1, 2.5)
 x_ax_lims = (-1.3, 2.5)
 ax_scat.set_xticks(x_tick_locs, x_tick_labs)
 ax_scat.set_yticks(tick_locs, tick_labs)
@@ -503,9 +385,33 @@ for y_loc in broken_stick_y_centers:
     y_locs = [y_loc * factor for factor in [0.98, 1, 1.02]]
     ax_scat.plot(x_locs, y_locs, '-k', linewidth=1, clip_on=False, zorder=1001)
 
-# add dashed horizontal line at 0
-ax_scat.plot(ax_scat.get_xlim(), [tick_locs[0]]*2,
-             ':k', linewidth=0.5, alpha=0.75, zorder=0)
+# add region delineating artifical y-axis zeros
+zero_poly = Polygon([*zip(([*ax_scat.get_xlim()] +
+                           [*ax_scat.get_xlim()][::-1] +
+                           [ax_scat.get_xlim()[0]]),
+                          ([ax_scat.get_ylim()[0]]*2 +
+                           [broken_stick_y_centers[0]]*2 +
+                           [ax_scat.get_ylim()[0]]))])
+zero_poly.set_color('#ababab')
+zero_poly.set_alpha(0.2)
+zero_poly.set_zorder(0)
+ax_scat.add_patch(zero_poly)
+#ax_scat.plot(ax_scat.get_xlim(), [tick_locs[0]]*2,
+#             ':r', linewidth=0.75, alpha=0.85, zorder=0)
+
+# add horizontal line at top, to visually separate parts A. and B.
+ax_scat.plot([-2.1, ax_scat.get_xlim()[1]],
+             [ax_scat.get_ylim()[1]]*2,
+             '-k', linewidth=2.5,
+             clip_on=False)
+
+# add gridlines
+ax_scat.grid(zorder=0, linestyle=':', color='gray', alpha=0.75, linewidth=0.5)
+# and extend gridlines vertically under KDEs
+for x in ax_scat.get_xticks():
+    ax_scat.plot([x,x], [ax_scat.get_ylim()[0], 6.565],
+                 linestyle=':', color='gray', linewidth=0.5, alpha=0.75,
+                 zorder=0, clip_on=False)
 
 # get practice medians
 agb_meds = np.log10(agb_comp.groupby('practice').median().loc[:,['card_stock_change']])
@@ -605,7 +511,7 @@ for prac_i, prac in enumerate(sorted_pracs):
     if prac_i == 0:
         ax_kde.text(1.6*ax_kde.get_xlim()[0], -0.25, 'A.',
                     size=24, weight='bold', color='black', clip_on=False)
-fig.subplots_adjust(left=0.18, right=0.97, bottom=0.08, top=0.99,
+fig.subplots_adjust(left=0.18, right=0.97, bottom=0.09, top=0.99,
                     wspace=0, hspace=-0.35)
 fig.savefig('C_density_pub_rs_comp_plot.png', dpi=700)
 fig.show()
@@ -635,10 +541,10 @@ def calc_coord_precision(coord):
 def calc_coord_precision_column(df):
     lat_prec = [calc_coord_precision(lat) for lat in df.lat]
     lon_prec = [calc_coord_precision(lon) for lon in df.lon]
-    prec_col = (np.array(lat_prec) + np.array(lon_prec))/2
+    prec_col = np.max(np.vstack((np.array(lat_prec), np.array(lon_prec))), axis=0)
     # reclass the numeric coord_prec
-    class_bin_lefts= [1, 2, 4]
-    class_bin_rights = [2, 4, 10000]
+    class_bin_lefts= [1, 2, 3]
+    class_bin_rights = [2, 3, 10000]
     class_bins = ['low', 'mod', 'high']
     prec_bin_col = []
     for val in prec_col:
@@ -687,7 +593,7 @@ print('\n\n')
 # the opposite)
 agb_comp['meas_yr_diff'] = np.float64(agb_comp['meas_yr'] - 2000)
 agb_comp = agb_comp[agb_comp['meas_yr_diff'] > -10]
-fig_yr_diff, ax_yr_diff = plt.subplots(1, 1, figsize=(6,5))
+fig_yr_diff, ax_yr_diff = plt.subplots(1, 1, figsize=(6.5,6.5))
 for prac in pracs:
     sub_agb_comp = agb_comp[agb_comp['practice'] == prac]
     sns.scatterplot(x='meas_yr_diff',
@@ -708,7 +614,8 @@ ax_yr_diff.set_ylabel(('stock estimate difference ($Mg\ C\ ha^{-1}$)\n'
                        '(Cardinael data stock estmate - '
                        'WHRC stock estimate'),
                        fontdict={'fontsize':12})
-ax_yr_diff.set_xlim(-16, 16)
+ax_yr_diff.set_xlim(-10, 15)
+ax_yr_diff.set_ylim(-225, 165)
 ax_yr_diff.tick_params(labelsize=8)
 agb_comp_reg = agb_comp.loc[:, ['stock_diff_whrc', 'meas_yr_diff']].dropna()
 agb_comp_reg = agb_comp_reg[agb_comp_reg['meas_yr_diff'] > -10]
