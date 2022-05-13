@@ -4,6 +4,7 @@
 *.jpg
 *.csv
 *.tif
+*.tif.aux.xml
 *.zip
 *.xlsx
 *.odg

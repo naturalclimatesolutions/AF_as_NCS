@@ -18,9 +18,9 @@ from copy import deepcopy
 import warnings
 
 
-save_it = True
-make_map = False
-make_plots = True
+save_it = False
+make_map = True
+make_plots = False
 
 # plot params
 map_minx = -12700000
@@ -203,6 +203,11 @@ chap_rast = rxr.open_rasterio('./chapman_all_Mg_C_ha_ca2km_EPSG_8857.tif',
                               chunks=(5, 5),
                              )
 #chap_rast = chap_rast.rio.clip_box(map_minx, map_miny, map_maxx, map_maxy)
+
+# load Lesiv et al. 2022 raster data
+lesiv = rxr.open_rasterio('./lesiv_et_al_2022_forest_management_ca2k_EPSG8857.tif')[0]
+# mask to only 53 ('agroforestry' class)
+lesiv = lesiv.where(lesiv==53, np.nan)
 
 
 # load the Chapman SI datasets, then merge onto countries to make spatial
@@ -482,13 +487,15 @@ if make_map:
         ticklocs = [tl for n, tl in enumerate(ticklocs) if n%2 == 0]
         bcax.set_xticks(ticklocs, new_ticklabs)
 
+        return
+
 
     map_pal = palettable.cmocean.sequential.Algae_3.mpl_colormap
     soil_color = palettable.cmocean.sequential.Speed_20.mpl_colormap(2)
     map_pal.set_under(soil_color)
     map_pal.set_bad('#ffffff00')
-    fig_0 = plt.figure(figsize=(12, 9))
-    ax = fig_0.add_subplot(111)
+    fig_0 = plt.figure(figsize=(24, 9))
+    ax = fig_0.add_subplot(211)
     # axes at bottom for colorbar
     divider = make_axes_locatable(ax)
     bcax = divider.append_axes("bottom", size="7%", pad=0.1)
@@ -560,11 +567,69 @@ if make_map:
     bcax.axvline(x=5, ymin=0, ymax=1, linewidth=2, color='black')
     # call map-formatting fn
     format_map_axes(ax, bcax, add_latlon_lines=add_latlon_lines)
-    # asjust spacing
+
+
+
+
+    ax = fig_0.add_subplot(212)
+    # plot land underneath
+    countries.to_crs(8857).plot(color='#f7f7f7',
+                                linewidth=0.25,
+                                edgecolor='none',
+                                ax=ax,
+                                zorder=0,
+                                )
+    # plot Chapman data
+    lesiv.squeeze().plot.imshow(cmap=palettable.cmocean.sequential.Algae_3.mpl_colormap,
+                                    vmin=1,
+                                    vmax=1,
+                                    add_labels=False,
+                                    add_colorbar=False,
+                                    #cbar_ax=bcax,
+                                    #cbar_kwargs={'orientation': 'horizontal'},
+                                    ax=ax,
+                                    #extend='max',
+                                    zorder=1,
+                                   )
+    # plot countries and continents
+    countries.to_crs(8857).plot(color='#dddddd22',
+                                linewidth=0.25,
+                                edgecolor='#9d9d9d',
+                                ax=ax,
+                                zorder=2,
+                                )
+    for cont in continents.index.unique():
+        if cont not in ['Antarctica', 'Seven Seas']:
+            data = continents.reset_index()[continents.reset_index()['index'] == cont]
+            data.to_crs(8857).plot(color='none',
+                                   linewidth=0.25,
+                                   #edgecolor=data['color'].values[0],
+                                   edgecolor='#9d9d9d',
+                                   ax=ax,
+                                   zorder=2,
+                                   )
+    # add locations
+    for i, row in af_locs.to_crs(8857).iterrows():
+        ax.scatter(row.geometry.centroid.xy[0][0],
+                   row.geometry.centroid.xy[1][0],
+                   c='black',
+                   s=25+(25*np.invert(row['in_chap'])),
+                   marker=row['in_chap_markers'],
+                   edgecolor='white',
+                   linewidth=0.6,
+                   alpha=1,
+                   zorder=3,
+                  )
+
+    # call map-formatting fn
+    format_map_axes(ax, bcax, add_latlon_lines=add_latlon_lines)
+
+    # adjust spacing
     fig_0.subplots_adjust(left=0.03,
                           bottom=0.075,
                           right=0.97,
                           top=1,
+                          wspace=0.1,
                          )
     fig_0.show()
 
