@@ -20,6 +20,7 @@ mapping/AF_locations_from_papers/scratch/
 mapping/chapman_data_aggregated/*
 mapping/chapman_potential_data/*
 mapping/country_bounds/*
+mapping/af_locs_w_chapman_vals.*
 mapping/AF_locations_from_papers/*.cpg
 mapping/AF_locations_from_papers/*.dbf
 mapping/AF_locations_from_papers/*.prj
