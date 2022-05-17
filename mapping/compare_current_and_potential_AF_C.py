@@ -16,19 +16,18 @@ from scipy.stats import ttest_ind
 from scipy import stats
 from copy import deepcopy
 import warnings
+import os
 
 
 save_it = True
 make_map = True
-#map_dataset = 'Chapman'
-map_dataset = 'Lesiv'
 make_plots = False
 
 # plot params
-map_minx = -14850000
-map_maxx = 20100000
-map_miny = -7700000
-map_maxy = 8992644
+map_minx = -12850000
+map_maxx = 15700000
+map_miny = -6700000
+map_maxy = 8492644
 add_latlon_lines = False
 suptitle_fontsize = 50
 title_fontsize = 40
@@ -64,6 +63,7 @@ savefig=True
 
 
 # load datasets
+rast_datadir = '/media/deth/SLAB/TNC/tmp_AF_global_maps/'
 rosenstock = gpd.read_file(('./rosenstock_et_al_2019_data/'
                             'rosenstock_et_al_2019_AF_NDCs_db.shp'))
 chapman_C_agg = gpd.read_file(('./chapman_data_aggregated/'
@@ -258,47 +258,52 @@ potential['cont'] = get_continents(potential)
 af_locs['cont'] = get_continents(af_locs)
 
 
-# load Chapman raster data, if needed
-if map_dataset == 'Chapman':
-    chap_rast = rxr.open_rasterio('./chapman_2km.tif',
-                                  masked=False,
-                                  cache=False,
-                                  chunks=(5, 5),
-                                 )[0]
+# load Chapman raster data, and extract values at AF locs
+chap_rast = rxr.open_rasterio(os.path.join(rast_datadir,
+                                           './chapman_3km_ESRI_54012.tif'),
+                              masked=True,
+                              cache=False,
+                              chunks=(5, 5),
+                             )[0]
 
-    chap_rast = chap_rast.rio.clip_box(map_minx, map_miny, map_maxx, map_maxy)
-    chap_rast = chap_rast.where(chap_rast>-9999, np.nan)
+chap_rast = chap_rast.rio.clip_box(map_minx, map_miny, map_maxx, map_maxy)
+chap_rast = chap_rast.where(chap_rast!=-999, np.nan)
+# figure out if each location is covered by Chapman data or not
+in_chap = []
+chap_val_list = []
+for i, row in af_locs.to_crs(chap_rast.rio.crs).iterrows():
+    lon, lat = [i[0] for i in row.geometry.coords.xy]
+    chap_vals = chap_rast.sel(x=lon, y=lat, method='nearest').values
+    assert chap_vals.size == 1
+    chap_val = float(chap_vals)
+    chap_val_list.append(chap_val)
+    in_chap.append(np.invert(np.isnan(chap_val)))
+af_locs['chap_val'] = chap_val_list
+af_locs['in_chap'] = in_chap
+af_locs['in_chap_markers'] = [{True: 'o', False: 'X'}[val] for val in
+                              af_locs['in_chap']]
 
-
-    # figure out if each location is covered by Chapman data or not
-    in_chap = []
-    chap_val_list = []
-    for i, row in af_locs.to_crs(chap_rast.rio.crs).iterrows():
-        lon, lat = [i[0] for i in row.geometry.coords.xy]
-        chap_vals = chap_rast.sel(x=lon, y=lat, method='nearest').values
-        assert chap_vals.size == 1
-        chap_val = float(chap_vals)
-        chap_val_list.append(chap_val)
-        in_chap.append(np.invert(np.isnan(chap_val)))
-    af_locs['chap_val'] = chap_val_list
-    af_locs['in_chap'] = in_chap
-    af_locs['in_chap_markers'] = [{True: 'o', False: 'X'}[val] for val in
-                                  af_locs['in_chap']]
-    af_locs.to_file('af_locs_w_chapman_vals.shp', index=False)
-
-# else load Lesiv data (and cached af_locs df), instead
-elif map_dataset == 'Lesiv':
-    # clear memory
-    af_locs = gpd.read_file('af_locs_w_chapman_vals.shp')
-    lesiv_rast = rxr.open_rasterio('./lesiv_2km.tif',
-                                   masked=False,
-                                   cache=True,
-                                   chunks=(5,5),
-                                  )[0]
-    lesiv_rast = lesiv_rast.rio.clip_box(map_minx, map_miny, map_maxx, map_maxy)
-    lesiv_rast = (lesiv_rast==53).astype(np.int8)
-    lesiv_rast = lesiv_rast.where(lesiv_rast==1, np.nan)
-
+# load Lesiv data, and extract values at AF locs again
+lesiv_rast = rxr.open_rasterio(os.path.join(rast_datadir,
+                                            './lesiv_3km_ESRI_54012.tif'),
+                               masked=False,
+                               cache=True,
+                               chunks=(5,5),
+                              )[0]
+lesiv_rast = lesiv_rast.rio.clip_box(map_minx, map_miny, map_maxx, map_maxy)
+lesiv_rast = (lesiv_rast==53).astype(np.int8)
+lesiv_rast = lesiv_rast.where(lesiv_rast==1, np.nan)
+# figure out if each location is covered by Lesiv data or not
+in_lesiv = []
+for i, row in af_locs.to_crs(lesiv_rast.rio.crs).iterrows():
+    lon, lat = [i[0] for i in row.geometry.coords.xy]
+    lesiv_vals = lesiv_rast.sel(x=lon, y=lat, method='nearest').values
+    assert lesiv_vals.size == 1
+    lesiv_val = float(lesiv_vals)
+    in_lesiv.append(pd.notnull(lesiv_val))
+af_locs['in_lesiv'] = in_lesiv
+af_locs['in_lesiv_markers'] = [{True: 'o', False: 'X'}[val] for val in
+                               af_locs['in_lesiv']]
 
 # utils functions
 # CODE ADAPTED FROM:
@@ -437,10 +442,8 @@ data_for_figs['agrofor_feasden_Mgha'] = data_for_figs['agrofor_feasden']/1e6
 
 if make_map:
 
-    if map_dataset == 'Chapman':
-        crs = chap_rast.rio.crs
-    elif map_dataset == 'Lesiv':
-        crs = lesiv_rast.rio.crs
+    fig_0 = plt.figure(figsize=(12,15))
+    gs = fig_0.add_gridspec(2, 1, height_ratios=[1.1, 1])
 
     def format_map_axes(ax, bcax=None, max_tickval=None, add_latlon_lines=False):
         """
@@ -512,122 +515,130 @@ if make_map:
         return
 
 
-    map_pal = palettable.cmocean.sequential.Algae_3.mpl_colormap
-    map_pal.set_bad('#ffffff00')
-    if map_dataset == 'Chapman':
-        soil_color = palettable.cmocean.sequential.Speed_20.mpl_colormap(2)
-        map_pal.set_under(soil_color)
-    fig_0 = plt.figure(figsize=(12, 9))
-    ax = fig_0.add_subplot(111)
-    # axes at bottom for colorbar
-    divider = make_axes_locatable(ax)
-    if map_dataset == 'Chapman':
-        bcax = divider.append_axes("bottom", size="7%", pad=0.1)
-    else:
-        bcax = None
-    # plot land underneath
-    countries.to_crs(crs).plot(color='#f7f7f7',
-                                linewidth=0.25,
-                                edgecolor='none',
-                                ax=ax,
-                                zorder=0,
-                                )
-    # plot Chapman data
-    if map_dataset == 'Chapman':
-        rast = chap_rast
-        vmin = 5
-        vmax = 40
-        add_colorbar = True
-        cbar_ax = bcax
-        cbar_kwargs={'orientation': 'horizontal'}
-        extend = 'max'
-    elif map_dataset == 'Lesiv':
-        rast = lesiv_rast
-        vmin = None
-        vmax = None
-        add_colorbar = False
-        cbar_ax = None
-        cbar_kwargs = None
-        extend = None
-    rast.plot.imshow(cmap=map_pal,
-                                    vmin=vmin,
-                                    vmax=vmax,
-                                    add_labels=False,
-                                    add_colorbar=add_colorbar,
-                                    cbar_ax=cbar_ax,
-                                    cbar_kwargs=cbar_kwargs,
+
+
+    for map_dataset, rast in zip(['Chapman', 'Lesiv'], [chap_rast, lesiv_rast]):
+
+        crs = rast.rio.crs
+
+        map_pal = palettable.cmocean.sequential.Algae_3.mpl_colormap
+        map_pal.set_bad('#ffffff00')
+        if map_dataset == 'Chapman':
+            soil_color = palettable.cmocean.sequential.Speed_20.mpl_colormap(2)
+            map_pal.set_under(soil_color)
+        ax = fig_0.add_subplot(2, 1, 1+(map_dataset=='Lesiv'))
+        # axes at bottom for colorbar
+        divider = make_axes_locatable(ax)
+        if map_dataset == 'Chapman':
+            bcax = divider.append_axes("bottom", size="7%", pad=0.1)
+        else:
+            bcax = None
+        # plot land underneath
+        countries.to_crs(crs).plot(color='#f7f7f7',
+                                    linewidth=0.25,
+                                    edgecolor='none',
                                     ax=ax,
-                                    extend=extend,
-                                    zorder=1,
-                                   )
-    # plot countries and continents
-    countries.to_crs(crs).plot(color='#dddddd22',
-                                linewidth=0.25,
-                                edgecolor='#9d9d9d',
-                                ax=ax,
-                                zorder=2,
-                                )
-    for cont in continents.index.unique():
-        if cont not in ['Antarctica', 'Seven Seas']:
-            data = continents.reset_index()[continents.reset_index()['index'] == cont]
-            data.to_crs(crs).plot(color='none',
-                                   linewidth=0.25,
-                                   #edgecolor=data['color'].values[0],
-                                   edgecolor='#9d9d9d',
-                                   ax=ax,
-                                   zorder=2,
-                                   )
-    # add locations
-    for i, row in af_locs.to_crs(crs).iterrows():
-        ax.scatter(row.geometry.centroid.xy[0][0],
-                   row.geometry.centroid.xy[1][0],
-                   c='black',
-                   s=25+(25*np.invert(row['in_chap'])),
-                   # NOTE: SAVED SHAPEFILE READ IN FOR LESIV ANALYSIS
-                   #       HAS TRUNCATED COLUMN NAMES
-                   marker=row['in_chap_ma%s' % ('rkers' * (map_dataset==
-                                                           'Chapman'))],
-                   edgecolor='white',
-                   linewidth=0.6,
-                   alpha=1,
-                   zorder=3,
-                  )
+                                    zorder=0,
+                                    )
+        # plot Chapman data
+        if map_dataset == 'Chapman':
+            vmin = 5
+            vmax = 40
+            add_colorbar = True
+            cbar_ax = bcax
+            cbar_kwargs={'orientation': 'horizontal'}
+            extend = 'max'
+        elif map_dataset == 'Lesiv':
+            vmin = None
+            vmax = None
+            add_colorbar = False
+            cbar_ax = None
+            cbar_kwargs = None
+            extend = None
+        rast.plot.imshow(cmap=map_pal,
+                         vmin=vmin,
+                         vmax=vmax,
+                         add_labels=False,
+                         add_colorbar=add_colorbar,
+                         cbar_ax=cbar_ax,
+                         cbar_kwargs=cbar_kwargs,
+                         ax=ax,
+                         extend=extend,
+                         zorder=1,
+                        )
+        # plot countries and continents
+        countries.to_crs(crs).plot(color='#dddddd22',
+                                    linewidth=0.25,
+                                    edgecolor='#9d9d9d',
+                                    ax=ax,
+                                    zorder=2,
+                                    )
+        for cont in continents.index.unique():
+            if cont not in ['Antarctica', 'Seven Seas']:
+                data = continents.reset_index()[continents.reset_index()['index'] == cont]
+                data.to_crs(crs).plot(color='none',
+                                       linewidth=0.25,
+                                       #edgecolor=data['color'].values[0],
+                                       edgecolor='#9d9d9d',
+                                       ax=ax,
+                                       zorder=2,
+                                       )
 
-    # print % of sites falling within Chapman data, and % of those falling
-    # within 'agroforestry' pixels
-    pct_in_chap = 100*np.sum(af_locs['in_chap'])/len(af_locs)
-    pct_in_chap_in_af = 100*np.mean(af_locs['chap_val'][af_locs['in_chap']]>=5)
-    print(('\n\n%0.2f%% OF ALL STUDIES FALL WITHIN CHAPMAN DATA, '
-           'AND %0.2f%% OF THOSE FALL WITHIN CHAPMAN \'AGROFORESTRY\''
-           ' PIXELS (i.e., PIXELS >= 5 Mg C ha^-1\n\n') %
-          (pct_in_chap, pct_in_chap_in_af))
+        # add locations
+        if map_dataset == 'Chapman':
+            coverage_col = 'in_chap'
+            coverage_mrkr_col = 'in_chap_markers'
+        elif map_dataset == 'Lesiv':
+            coverage_col = 'in_lesiv'
+            coverage_mrkr_col = 'in_lesiv_markers'
+        for i, row in af_locs.to_crs(crs).iterrows():
+            ax.scatter(row.geometry.centroid.xy[0][0],
+                       row.geometry.centroid.xy[1][0],
+                       c='black',
+                       s=25+(25*np.invert(bool(row[coverage_col]))),
+                       marker=row[coverage_mrkr_col],
+                       edgecolor='white',
+                       linewidth=0.6,
+                       alpha=1,
+                       zorder=3,
+                      )
 
-    # fix the colorbar and set ticks and labels
-    if map_dataset == 'Chapman':
-        patches_0to5 = [Rectangle(xy=(0, 0), width=5, height=1)]
-        p = PatchCollection(patches_0to5, alpha=1, color=soil_color, zorder=0)
-        bcax.add_collection(p)
-        bcax.set_xlim((0, bcax.get_xlim()[1]))
-        bcax.set_ylim((0, 1))
-        bcax.set_xticks([0,5,10,20,30,40], ['0', '5', '10', '20', '30', '40+'])
-        bcax.axvline(x=5, ymin=0, ymax=1, linewidth=2, color='black')
-    # call map-formatting fn
-    format_map_axes(ax, bcax, add_latlon_lines=add_latlon_lines)
+        # print % of sites falling within data, and % of those falling
+        # within Chapman 'agroforestry' pixels
+        if map_dataset == 'Chapman':
+            pct_in_chap = 100*np.sum(af_locs['in_chap'])/len(af_locs)
+            pct_in_chap_in_af = 100*np.mean(af_locs['chap_val'][af_locs['in_chap']]>=5)
+            print(('\n\n%0.2f%% OF ALL STUDIES FALL WITHIN CHAPMAN DATA, '
+                   'AND %0.2f%% OF THOSE FALL WITHIN CHAPMAN \'AGROFORESTRY\''
+                   ' PIXELS (i.e., PIXELS >= 5 Mg C ha^-1)\n\n') %
+                  (pct_in_chap, pct_in_chap_in_af))
+        elif map_dataset == 'Lesiv':
+            pct_in_lesiv = 100*np.sum(af_locs['in_lesiv'])/len(af_locs)
+            print(('\n\n%0.2f%% OF ALL STUDIES FALL WITHIN LESIV DATA'
+                   '\n\n') % pct_in_lesiv)
 
-    # adjust spacing
-    if map_dataset == 'Chapman':
-        bottom = 0.075
-    else:
-        bottom = 0
+        # fix the colorbar and set ticks and labels
+        if map_dataset == 'Chapman':
+            patches_0to5 = [Rectangle(xy=(0, 0), width=5, height=1)]
+            p = PatchCollection(patches_0to5, alpha=1, color=soil_color, zorder=0)
+            bcax.add_collection(p)
+            bcax.set_xlim((0, bcax.get_xlim()[1]))
+            bcax.set_ylim((0, 1))
+            bcax.set_xticks([0,5,10,20,30,40], ['0', '5', '10', '20', '30', '40+'])
+            bcax.axvline(x=5, ymin=0, ymax=1, linewidth=2, color='black')
+        # call map-formatting fn
+        format_map_axes(ax, bcax, add_latlon_lines=add_latlon_lines)
+
     fig_0.subplots_adjust(left=0.03,
-                          bottom=bottom,
+                          bottom=0,
                           right=0.97,
                           top=1,
+                          hspace=0.15,
                          )
     fig_0.show()
 
     if save_it:
-        fig_0.savefig('ag_woody_C_and_known_AF_locs_%s.png' % map_dataset,
+        fig_0.savefig('AF_maps_and_known_AF_locs.png',
                      dpi=dpi, orientation='landscape')
 
 
