@@ -601,13 +601,13 @@ if make_map:
         if map_dataset == 'Chapman':
             pct_in_chap = 100*np.sum(af_locs['in_chap'])/len(af_locs)
             pct_in_chap_in_af = 100*np.mean(af_locs['chap_val'][af_locs['in_chap']]>=5)
-            print(('\n\n%0.2f%% OF ALL STUDIES FALL WITHIN CHAPMAN DATA, '
+            print(('\n\n%0.2f%% OF ALL SITES FALL WITHIN CHAPMAN DATA, '
                    'AND %0.2f%% OF THOSE FALL WITHIN CHAPMAN \'AGROFORESTRY\''
                    ' PIXELS (i.e., PIXELS >= 5 Mg C ha^-1)\n\n') %
                   (pct_in_chap, pct_in_chap_in_af))
         elif map_dataset == 'Lesiv':
             pct_in_lesiv = 100*np.sum(af_locs['in_lesiv'])/len(af_locs)
-            print(('\n\n%0.2f%% OF ALL STUDIES FALL WITHIN LESIV DATA'
+            print(('\n\n%0.2f%% OF ALL SITES FALL WITHIN LESIV DATA'
                    '\n\n') % pct_in_lesiv)
 
         # fix the colorbar and set ticks and labels
