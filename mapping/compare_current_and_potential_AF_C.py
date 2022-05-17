@@ -77,10 +77,12 @@ ndc_contrib_raw = pd.read_csv(('./NDC_contribs/pathway_mitigation_potential_and_
                                '_targets_with_ISO3.csv'))
 
 af_locs = gpd.read_file(('AF_locations_from_papers/'
-                         'AF_locations_from_meta-analyses.shp'))
-                         # NOTE: I EXTRACTED NATIVE-RES CHAPMAN VALS TO
+                         'AF_locations_from_meta-analyses_W_LESIV.shp'))
+                         # NOTE: I extracted the native-res Lesiv data to
+                         #       the AF locations beforehand
+                         # NOTE: I ALSO EXTRACTED NATIVE-RES CHAPMAN VALS TO
                          # COORDINATES, BUT THEN THE VAST MAJORITY OF POINTS
-                         # ARE MISSED! I'LL USE THE 2km-AGGREGATED DATA
+                         # ARE MISSED! DECIDE TO USE THE 3km-AGGREGATED DATA
                          # INSTEAD, AS POINTS MISSED EVEN BY THAT INDICATE
                          # AREAS WITH NO VALID CHAPMAN DATA EVEN WITHIN 2km OF
                          # PUBLISHED COORDIANTES
@@ -260,7 +262,7 @@ af_locs['cont'] = get_continents(af_locs)
 
 # load Chapman raster data, and extract values at AF locs
 chap_rast = rxr.open_rasterio(os.path.join(rast_datadir,
-                                           './chapman_3km_ESRI_54012.tif'),
+                                           'chapman_3km_ESRI_54012.tif'),
                               masked=True,
                               cache=False,
                               chunks=(5, 5),
@@ -285,7 +287,7 @@ af_locs['in_chap_markers'] = [{True: 'o', False: 'X'}[val] for val in
 
 # load Lesiv data, and extract values at AF locs again
 lesiv_rast = rxr.open_rasterio(os.path.join(rast_datadir,
-                                            './lesiv_3km_ESRI_54012.tif'),
+                                            'lesiv_3km_ESRI_54012.tif'),
                                masked=False,
                                cache=True,
                                chunks=(5,5),
@@ -293,15 +295,6 @@ lesiv_rast = rxr.open_rasterio(os.path.join(rast_datadir,
 lesiv_rast = lesiv_rast.rio.clip_box(map_minx, map_miny, map_maxx, map_maxy)
 lesiv_rast = (lesiv_rast==53).astype(np.int8)
 lesiv_rast = lesiv_rast.where(lesiv_rast==1, np.nan)
-# figure out if each location is covered by Lesiv data or not
-in_lesiv = []
-for i, row in af_locs.to_crs(lesiv_rast.rio.crs).iterrows():
-    lon, lat = [i[0] for i in row.geometry.coords.xy]
-    lesiv_vals = lesiv_rast.sel(x=lon, y=lat, method='nearest').values
-    assert lesiv_vals.size == 1
-    lesiv_val = float(lesiv_vals)
-    in_lesiv.append(pd.notnull(lesiv_val))
-af_locs['in_lesiv'] = in_lesiv
 af_locs['in_lesiv_markers'] = [{True: 'o', False: 'X'}[val] for val in
                                af_locs['in_lesiv']]
 
@@ -629,9 +622,13 @@ if make_map:
         # call map-formatting fn
         format_map_axes(ax, bcax, add_latlon_lines=add_latlon_lines)
 
-    fig_0.subplots_adjust(left=0.03,
+        # add letter label to figure sections
+        label = {'Chapman': 'A.', 'Lesiv': 'B.'}[map_dataset]
+        ax.text(1.13*map_minx, 0.88*map_maxy, label, size=28, weight='bold', clip_on=False)
+
+    fig_0.subplots_adjust(left=0.06,
                           bottom=0,
-                          right=0.97,
+                          right=0.98,
                           top=1,
                           hspace=0.15,
                          )
