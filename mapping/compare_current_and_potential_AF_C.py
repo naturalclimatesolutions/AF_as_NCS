@@ -584,6 +584,7 @@ if make_map:
         elif map_dataset == 'Lesiv':
             coverage_col = 'in_lesiv'
             coverage_mrkr_col = 'in_lesiv_markers'
+        print('\n\nMAPPING %i KNOWN AF LOCATIONS\n\n' % af_locs.shape[0])
         for i, row in af_locs.to_crs(crs).iterrows():
             ax.scatter(row.geometry.centroid.xy[0][0],
                        row.geometry.centroid.xy[1][0],
