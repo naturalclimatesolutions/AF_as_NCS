@@ -14,6 +14,12 @@ from latlon_utils import get_climate
 import re, os
 
 
+###############################################
+# plot params
+###############################################
+
+dpi = 700
+
 
 ###############################################
 # load data
@@ -263,9 +269,9 @@ agb_comp['in_chap'] = ((pd.notnull(agb_comp['whrc_stock'])) &
                        (pd.notnull(agb_comp['chap_stock'])))
 
 
-##########################################
-# make plots
-##########################################
+###############
+# make figure 2
+###############
 
 # get array of all the practices
 pracs = agb_comp.practice.unique()
@@ -302,29 +308,34 @@ dataset_label = 'WHRC et al. unpub. 2022'
 # make the scatterplot at top
 ax_scat = fig.add_subplot(gs[-1,:])
 ax_scat.plot([-100, 100], [-100, 100], ':k', alpha=0.3)
-# median marks (Chapman sites and all sites)
-med_log_card = np.log10(np.nanmedian(agb_comp.card_stock_change))
-chap_med_log_card = np.log10(np.nanmedian(agb_comp[agb_comp.in_chap].card_stock_change))
-med_abs_card = np.nanmedian(agb_comp.card_stock_change)
-chap_med_abs_card = np.nanmedian(agb_comp[agb_comp.in_chap].card_stock_change)
-med_log_whrc = np.log10(np.nanmedian(agb_comp.whrc_stock))
-chap_med_log_whrc = np.log10(np.nanmedian(agb_comp[agb_comp.in_chap].whrc_stock))
-med_abs_whrc = np.nanmedian(agb_comp.whrc_stock)
-chap_med_abs_whrc = np.nanmedian(agb_comp[agb_comp.in_chap].whrc_stock)
+# choose centrality metric
+cent_met = 'mean' # 'median'
+cent_met_fn_dict = {'median': np.nanmedian, 'mean': np.nanmean}
+cent_fn = cent_met_fn_dict[cent_met]
+# centrality marks (Chapman sites and all sites)
+cent_log_card = np.log10(cent_fn(agb_comp.card_stock_change))
+chap_cent_log_card = np.log10(cent_fn(agb_comp[agb_comp.in_chap].card_stock_change))
+cent_abs_card = cent_fn(agb_comp.card_stock_change)
+chap_cent_abs_card = cent_fn(agb_comp[agb_comp.in_chap].card_stock_change)
+cent_log_whrc = np.log10(cent_fn(agb_comp.whrc_stock))
+chap_cent_log_whrc = np.log10(cent_fn(agb_comp[agb_comp.in_chap].whrc_stock))
+cent_abs_whrc = cent_fn(agb_comp.whrc_stock)
+chap_cent_abs_whrc = cent_fn(agb_comp[agb_comp.in_chap].whrc_stock)
 
-ax_scat.scatter([med_log_card], [med_log_whrc], marker='*', s=90,
+ax_scat.scatter([cent_log_card], [cent_log_whrc], marker='*', s=90,
                 alpha=0.9, facecolor='None', edgecolor='k', linewidth=2)
-ax_scat.scatter([chap_med_log_card], [chap_med_log_whrc], marker='o', s=90,
+ax_scat.scatter([chap_cent_log_card], [chap_cent_log_whrc], marker='o', s=90,
                 alpha=0.9, facecolor='None', edgecolor='k', linewidth=2)
-# print medians
-print('\n\nMedian in situ: only Chapman-covered points: %0.2f\n\n' % chap_med_abs_card)
-print('\n\nMedian in situ: all points: %0.2f\n\n' % med_abs_card)
+# print centrality metrics
+print('\n\n%s in situ: only Chapman-covered points: %0.2f\n\n' % (cent_met,
+                                                                  chap_cent_abs_card))
+print('\n\n%s in situ: all points: %0.2f\n\n' % (cent_met, cent_abs_card))
 print('\n\nPercent decrease using all points: %0.2f%%\n\n' % (
-                    100 * ((med_abs_card - chap_med_abs_card)/med_abs_card)))
-print('\n\nMedian remote sensing: only Chapman-covered points: %0.2f\n\n' % chap_med_abs_whrc)
-print('\n\nMedian remote sensing: all points: %0.2f\n\n' % med_abs_whrc)
+                    100 * ((cent_abs_card - chap_cent_abs_card)/cent_abs_card)))
+print('\n\n%s remote sensing: only Chapman-covered points: %0.2f\n\n' % (cent_met, chap_cent_abs_whrc))
+print('\n\n%s remote sensing: all points: %0.2f\n\n' % (cent_met, cent_abs_whrc))
 print('\n\nPercent decrease using all points: %0.2f%%\n\n' % (
-                    100 * ((med_abs_whrc - chap_med_abs_whrc)/med_abs_whrc)))
+                    100 * ((cent_abs_whrc - chap_cent_abs_whrc)/cent_abs_whrc)))
 
 
 # label axes
@@ -513,10 +524,55 @@ for prac_i, prac in enumerate(sorted_pracs):
                     size=24, weight='bold', color='black', clip_on=False)
 fig.subplots_adjust(left=0.18, right=0.97, bottom=0.09, top=0.99,
                     wspace=0, hspace=-0.35)
-fig.savefig('C_density_pub_rs_comp_plot.png', dpi=700)
+fig.savefig('FIG2_C_density_pub_rs_comp_plot.png', dpi=dpi)
 fig.show()
 
 
+
+
+################
+# make figure s2
+################
+
+#stock_var = 'stock_change'
+stock_var = 'stock'
+save_it = True
+var_dict = {
+            'dens': 'stem density',
+           }
+var_axlabel_dict = {'dens': 'density ($stems\  ha^{-1}$)'}
+for var in var_dict.keys():
+    fig, axs = plt.subplots(3,1, figsize=(6.5,9.75))
+    for i, pool in enumerate(['agb', 'bgb', 'soc']):
+        ax = axs[i]
+        sns.scatterplot(var,
+                        stock_var,
+                        hue='practice',
+                        hue_order=pracs,
+                        s=30,
+                        alpha=0.8,
+                        data=all[all['var'] == pool],
+                        ax=ax,
+                        legend=i==2,
+                        palette=prac_colors,
+                        edgecolor='black',
+                       )
+        ax.set_title(pool.upper(), fontdict={'fontsize': 20})
+        ax.set_xlabel(var_axlabel_dict[var], fontdict={'fontsize': 16})
+        ax.set_ylabel('stock %s($Mg\ C\ ha^{-1}$)' % ('change ' * (stock_var ==
+                                                                  'stock_change')),
+                      fontdict={'fontsize': 16})
+        ax.tick_params(labelsize=12)
+    fig.subplots_adjust(top=0.96, bottom=0.06, left=0.13, right=0.96, hspace=0.6)
+    fig.show()
+    if save_it:
+        fig.savefig('FIGS2_C_vs_%s_scatters.png' % var, dpi=700)
+
+
+
+################
+# make figure s3
+################
 
 # assess variance in divergence from 1:1 line as fn of geo coord precision
 def calc_coord_precision(coord):
@@ -631,6 +687,9 @@ print('\n\tslope: %0.4f $Mg\ C\ ha^{-1} yr^{-1} (p=%0.2e)' % (mod.params['x1'],
 print('\n\tR-squared: %0.4f' % mod.rsquared)
 fig_yr_diff.subplots_adjust(left=0.2, right=0.97, bottom=0.15, top=0.93,
                             wspace=0, hspace=0)
-fig_yr_diff.savefig('regression_WHRC_Cardinael_stock_diff_on_meas_yr_diff.png',
-               dpi=700)
+fig_yr_diff.savefig('FIGS3_regression_WHRC_Cardinael_stock_diff_vs_meas_yr_diff.png',
+               dpi=dpi)
 fig_yr_diff.show()
+
+
+

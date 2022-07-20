@@ -21,7 +21,7 @@ import os
 
 save_it = True
 make_map = True
-make_plots = False
+make_plots = True
 
 # plot params
 map_minx = -12850000
@@ -37,7 +37,7 @@ annot_fontsize = 14
 cbar_fontsize = 14
 fig1_width = 5
 fig1_height = 7
-dpi = 400
+dpi = 700
 n_ticklabels = 5
 contour_alpha = 0.5
 contour_linewidth = 0.1
@@ -77,16 +77,22 @@ ndc_contrib_raw = pd.read_csv(('./NDC_contribs/pathway_mitigation_potential_and_
                                '_targets_with_ISO3.csv'))
 
 af_locs = gpd.read_file(('AF_locations_from_papers/'
-                         'AF_locations_from_meta-analyses_W_LESIV.shp'))
-                         # NOTE: I extracted the native-res Lesiv data to
-                         #       the AF locations beforehand
-                         # NOTE: I ALSO EXTRACTED NATIVE-RES CHAPMAN VALS TO
-                         # COORDINATES, BUT THEN THE VAST MAJORITY OF POINTS
-                         # ARE MISSED! DECIDE TO USE THE 3km-AGGREGATED DATA
-                         # INSTEAD, AS POINTS MISSED EVEN BY THAT INDICATE
-                         # AREAS WITH NO VALID CHAPMAN DATA EVEN WITHIN 2km OF
-                         # PUBLISHED COORDIANTES
-                         #'chapman_AGC_at_known_AF_locs.shp'))
+                         'AF_locations_from_meta-analyses.shp'))
+                         #'AF_locations_from_meta-analyses_W_LESIV.shp'))
+                         # NOTE: I extracted the native-res Lesiv and Chapman data 
+                         #       to the AF locations beforehand, but just found
+                         #       that a huge amount of locations were missed by
+                         #       those datasets, and it's hard to say how much
+                         #       of that is attributable to error in the raster
+                         #       data vs. poor spatial precision in the AF
+                         #       locations collected from the literature; thus,
+                         #       I'm extracing these data to the AF after
+                         #       aggregating them to ~2.5 km res, which should
+                         #       greatly reduce the effect of the points with
+                         #       low spatial precision and thus give a better
+                         #       indication of the overall effectiveness of the
+                         #       two datasets at reflecting AF spatial
+                         #       distributions
 
 # load the IUCN AF NDC-mentions data from 2018 report
 # (gleaned in a cleaned form from Millie Chapman's work:
@@ -210,14 +216,16 @@ chapman_potential = pd.merge(countries, chapman_potential,
                                  left_on='iso_a3', right_on='ISO_A3',
                                  how='left')
 
-# convert densities to Mg C (from Mg biomass)
+# convert densities to Mg C (from Mg biomass) using IPCC-recommended
+# carbon:biomass ratio of 0.47
 for c in ['density_crop', 'density_pasture']:
-    chapman_potential[c] = chapman_potential[c]/2
+    chapman_potential[c] = chapman_potential[c] * 0.47
 
 # merge Roe et al. 2021 estimates onto this, also expressed in Mg C
 subroe = roe.loc[:, ['ISO', 'agrofor_techcum', 'agrofor_techden',
                         'agrofor_feascum', 'agrofor_feasden']]
 for col in subroe.columns[1:]:
+    # NOTE: convert t CO2 to t C
     subroe[col] = subroe[col] * 1e6 * (12.0107/(2 * 15.999))
 potential = pd.merge(chapman_potential, subroe,
                      left_on='iso_a3', right_on='ISO', how='left')
@@ -282,7 +290,9 @@ for i, row in af_locs.to_crs(chap_rast.rio.crs).iterrows():
     in_chap.append(np.invert(np.isnan(chap_val)))
 af_locs['chap_val'] = chap_val_list
 af_locs['in_chap'] = in_chap
-af_locs['in_chap_markers'] = [{True: 'o', False: 'X'}[val] for val in
+af_locs['in_chap_markers'] = [{True: 'o', False: 'o'}[val] for val in
+                              af_locs['in_chap']]
+af_locs['in_chap_colors'] = [{True: 'black', False: '#fc0d81'}[val] for val in
                               af_locs['in_chap']]
 
 # load Lesiv data, and extract values at AF locs again
@@ -295,7 +305,18 @@ lesiv_rast = rxr.open_rasterio(os.path.join(rast_datadir,
 lesiv_rast = lesiv_rast.rio.clip_box(map_minx, map_miny, map_maxx, map_maxy)
 lesiv_rast = (lesiv_rast==53).astype(np.int8)
 lesiv_rast = lesiv_rast.where(lesiv_rast==1, np.nan)
-af_locs['in_lesiv_markers'] = [{True: 'o', False: 'X'}[val] for val in
+# figure out if each location is covered by Chapman data or not
+in_lesiv = []
+for i, row in af_locs.to_crs(lesiv_rast.rio.crs).iterrows():
+    lon, lat = [i[0] for i in row.geometry.coords.xy]
+    lesiv_vals = lesiv_rast.sel(x=lon, y=lat, method='nearest').values
+    assert lesiv_vals.size == 1
+    lesiv_val = float(lesiv_vals)
+    in_lesiv.append(np.invert(np.isnan(lesiv_val)))
+af_locs['in_lesiv'] = in_lesiv
+af_locs['in_lesiv_markers'] = [{True: 'o', False: 'o'}[val] for val in
+                               af_locs['in_lesiv']]
+af_locs['in_lesiv_colors'] = [{True: 'black', False: '#fc0d81'}[val] for val in
                                af_locs['in_lesiv']]
 
 # utils functions
@@ -508,7 +529,9 @@ if make_map:
         return
 
 
-
+    print('='*80 + '\n\n')
+    print('\n\nMAPPING %i KNOWN AF LOCATIONS FROM %i STUDIES\n\n' % (
+                af_locs.shape[0], len(af_locs['study_id'].unique())))
 
     for map_dataset, rast in zip(['Chapman', 'Lesiv'], [chap_rast, lesiv_rast]):
 
@@ -581,19 +604,20 @@ if make_map:
         if map_dataset == 'Chapman':
             coverage_col = 'in_chap'
             coverage_mrkr_col = 'in_chap_markers'
+            coverage_color_col = 'in_chap_colors'
         elif map_dataset == 'Lesiv':
             coverage_col = 'in_lesiv'
             coverage_mrkr_col = 'in_lesiv_markers'
-        print('\n\nMAPPING %i KNOWN AF LOCATIONS\n\n' % af_locs.shape[0])
+            coverage_color_col = 'in_lesiv_colors'
         for i, row in af_locs.to_crs(crs).iterrows():
             ax.scatter(row.geometry.centroid.xy[0][0],
                        row.geometry.centroid.xy[1][0],
-                       c='black',
-                       s=25+(25*np.invert(bool(row[coverage_col]))),
+                       c=row[coverage_color_col],
+                       s=20+(0*np.invert(bool(row[coverage_col]))),
                        marker=row[coverage_mrkr_col],
-                       edgecolor='white',
+                       edgecolor='black',
                        linewidth=0.6,
-                       alpha=1,
+                       alpha=0.75,
                        zorder=3,
                       )
 
@@ -636,7 +660,7 @@ if make_map:
     fig_0.show()
 
     if save_it:
-        fig_0.savefig('AF_maps_and_known_AF_locs.png',
+        fig_0.savefig('FIG3_AF_maps_and_known_AF_locs.png',
                      dpi=dpi, orientation='landscape')
 
 
@@ -799,7 +823,8 @@ if make_plots:
         return (var - np.min(var))/(np.max(var) - np.min(var))
 
     data_for_figs['pct_below'] = np.clip(((data_for_figs['agrofor_feascum'] -
-                                         data_for_figs['total_biomass']/2)/(
+                                    # NOTE: multiply 0.47 to convert biomass to C
+                                         (0.47*data_for_figs['total_biomass']))/(
                     data_for_figs['agrofor_feascum']))*100, a_min = 0, a_max = None)
     #gdp = pd.read_csv('./API_NY.GDP.MKTP.CD_DS2_en_csv_v2_3731268.csv', skiprows=4)
     #gdp_pcap = pd.read_csv('./API_NY.GDP.PCAP.CD_DS2_en_csv_v2_3731360.csv', skiprows=4)
@@ -923,7 +948,7 @@ if make_plots:
     fig_1.show()
 
     if save_it:
-        fig_1.savefig('curr_and_potent_boxplots_and_curr_scat.png', dpi=700)
+        fig_1.savefig('FIG5_curr_and_potent_boxplots_and_curr_scat.png', dpi=dpi)
 
     # STATISTICAL TESTS:
         # t-tests of difference in ag-area-weighted average woody C density

@@ -38,7 +38,7 @@ ax.set_ylabel('number of primary studies', fontdict=ax_fontdict)
 ax.tick_params(labelsize=ticklabel_size)
 fig.subplots_adjust(bottom=0.12, left=0.12, top=0.97, right=0.97)
 if save_it:
-    fig.savefig('primary_study_coverage_across_meta-analyses.png', dpi=700)
+    fig.savefig('FIGS1_primary_study_coverage_across_meta-analyses.png', dpi=700)
 
 
 # print % studies covered only once
