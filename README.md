@@ -1,6 +1,7 @@
-# This repo contains code and small static data files used for our 'state of the knowledge' perspective piece on agroforestry as an NCS (Terasaki Hart et al. 2022)
+### overview:
+**This repo contains code and small static data files used for our 'state of the knowledge' perspective piece on agroforestry as an NCS (Terasaki Hart et al. 2022)**
 
-## < PUT CITATION HERE >
+# < PUT CITATION HERE >
 
 Analyses were run in two major stages, so directories of content are organized to reflect this:
   1. data prep and analysis on Google Earth Engine (*directories containing this material are prepended with 'GEE_'*)
