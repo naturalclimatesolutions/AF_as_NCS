@@ -1,5 +1,5 @@
 ### overview:
-**This repo contains code and small static data files used for our 'state of the knowledge' perspective piece on agroforestry as an NCS (Terasaki Hart et al. 2022)**
+This repo contains code and small static data files used for our 'state of the knowledge' perspective piece on agroforestry as an NCS (Terasaki Hart et al. 2022).
 
 # < PUT CITATION HERE >
 
