@@ -149,6 +149,10 @@ df['lon_trunc'] = np.round(df['lon'] ,n_coords_dec_for_dedup)
 # remove duplicate coords (out to specifed number of decimal places)
 df = df.drop_duplicates(subset = ['lon_trunc', 'lat_trunc'])
 
+# cull problem site.id values
+df =df[df.site_id != '17169']
+df =df[df.site_id != 17169]
+
 # scatter points, if requested
 if plot_it:
     plt.scatter(df['lon_trunc'], df['lat_trunc'])

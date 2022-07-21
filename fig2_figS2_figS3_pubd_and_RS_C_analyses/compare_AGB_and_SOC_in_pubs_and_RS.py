@@ -26,8 +26,8 @@ dpi = 700
 ###############################################
 # read in Cardinael data
 agb = pd.read_excel(('./Cardinael_et_al_2018_ERL_Database_AFS_Biomass'
-                     '_DETH_MEAS_YR_ADDED.xlsx'))
-soc = pd.read_excel('./Cardinael_et_al_2018_ERL_Database_AFS_SOC_DETH_EDIT.xlsx')
+                     '_BT_DETH_MEAS_YR_ADDED.xlsx'))
+soc = pd.read_excel('./Cardinael_et_al_2018_ERL_Database_AFS_SOC.xlsx')
 
 ###############################################
 # pre-processing
@@ -107,7 +107,6 @@ agb = agb.loc[:, ((agb.columns != 'stock_comm') &
 agb['stock_change'] = agb['stock']
 agb['bgb_stock_change'] = agb['bgb_stock']
 # add cols in soc data missing from here
-agb['valid'] = 1
 agb['soil'] = np.nan
 agb['depth'] = np.nan
 agb['mat'] = np.nan
@@ -143,8 +142,7 @@ soc['add_stock'] = soc['AFS_Stock_t_ha'] - soc['Control_Stock_t_ha']
 soc['stock'] = soc['AFS_Stock_t_ha']
 
 # rename cols
-soc = soc.loc[:, ['USED_BY_REMI',
-                  'Reference',
+soc = soc.loc[:, ['Reference',
                   'Longitude',
                   'Latitude',
                   'Country',
@@ -160,8 +158,7 @@ soc = soc.loc[:, ['USED_BY_REMI',
                   'stock',
                   'SOC_Storage_rate_t_ha_yr',
                  ]]
-soc.columns = ['valid',
-               'pub',
+soc.columns = ['pub',
                'lon',
                'lat',
                'cnt',
@@ -228,13 +225,13 @@ agb_pts = gpd.GeoDataFrame(agb_pts, geometry=gpd.points_from_xy(agb_pts.lon,
 
 # read in the points after Chapman data has been merged onto them,
 # for AGB estimate comparison
-agb_comp_chap = gpd.read_file('./agb_pts_from_cardinael_2018_chapman_extract.shp')
+agb_comp_chap = gpd.read_file('../GEE_shp_output/agb_pts_from_cardinael_2018_chapman_extract.shp')
 agb_comp_chap = agb_comp_chap.rename({'mean': 'chap_stock'}, axis=1)
 # NOTE: CORRECT FOR FACT THAT I ESTIMATED AGC FROM AGB USING 0.5 C/BIOMASS
 # RATIO (BEFORE EXPORTING FROM GEE), BUT CARDINAEL ET AL. 2018 USED 0.47
 agb_comp_chap['chap_stock'] = agb_comp_chap['chap_stock']*2*0.47
 
-agb_comp_whrc = gpd.read_file('./agb_pts_from_cardinael_2018_whrc_extract.shp')
+agb_comp_whrc = gpd.read_file('../GEE_shp_output/agb_pts_from_cardinael_2018_whrc_extract.shp')
 agb_comp_whrc = agb_comp_whrc.rename({'mean': 'whrc_stock'}, axis=1)
 # NOTE: CORRECT FOR FACT THAT I ESTIMATED AGC FROM AGB USING 0.5 C/BIOMASS
 # RATIO (BEFORE EXPORTING FROM GEE), BUT CARDINAEL ET AL. 2018 USED 0.47

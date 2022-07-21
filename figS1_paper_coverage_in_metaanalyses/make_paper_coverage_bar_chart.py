@@ -9,7 +9,8 @@ ticklabel_size = 15
 save_it = True
 
 # read data
-df = pd.read_excel('./Agroforestry Data Dec 2021_MERGED_METANALYSES.xlsx')
+df = pd.read_excel(('../fig3_maps_fig5_curr_vs_poten/AF_locations_from_papers/'
+                    'Agroforestry Data Dec 2021_MERGED_METANALYSES.xlsx'))
 
 # get meta-analysis cols
 with open('./meta-analysis_cols.txt', 'r') as f:

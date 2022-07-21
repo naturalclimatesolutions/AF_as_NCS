@@ -63,18 +63,20 @@ savefig=True
 
 
 # load datasets
-rast_datadir = '/media/deth/SLAB/TNC/tmp_AF_global_maps/'
-rosenstock = gpd.read_file(('./rosenstock_et_al_2019_data/'
+rast_datadir = '../GEE_tif_output/'
+rosenstock = gpd.read_file(('./rosenstock_data/'
                             'rosenstock_et_al_2019_AF_NDCs_db.shp'))
 chapman_C_agg = gpd.read_file(('./chapman_data_aggregated/'
                                'chapman_crop_and_pasture_country_agg.shp'))
 chapman_ag_area_agg = gpd.read_file(('./chapman_data_aggregated/'
                                        './chapman_ag_land_area_country_agg.shp'))
-roe = pd.read_excel('./Roe_et_al_SI.xlsx',
+roe = pd.read_excel('./roe_data/Roe_et_al_SI.xlsx',
                     sheet_name='1. Sectoral mitigation-country',
                     skiprows=10)
-ndc_contrib_raw = pd.read_csv(('./NDC_contribs/pathway_mitigation_potential_and_NDC'
-                               '_targets_with_ISO3.csv'))
+
+# TODO: DELETE ME:
+#ndc_contrib_raw = pd.read_csv(('./baruch-mordo_data/pathway_mitigation_potential_and_NDC'
+#                               '_targets_with_ISO3.csv'))
 
 af_locs = gpd.read_file(('AF_locations_from_papers/'
                          'AF_locations_from_meta-analyses.shp'))
@@ -361,61 +363,63 @@ potential['wt_avg_density'] = (((potential['area_crop'] *
                                  potential['density_pasture'])) /
                                potential['total_area'])
 
+
+# TODO: DELETE ME
 # prep NDC contributions analysis
 # subset and rename cols
-ndc_contrib = ndc_contrib_raw.loc[:, ['iso3',
-                    'CountryGeography',
-                    'Trees in Agriculture Lands [Chapman]',
-                    'Cost-effective Trees in Agriculture Lands [Chapman]',
-                    'Reforestation (GROA)',
-                    'Cost-effective Reforestation (GROA)',
-                    'Nutrient Management',
-                    'Cost-effective Nutrient Management',
-                    'Optimal Grazing Intensity',
-                    'Cost-effective Optimal Grazing Intensity',
-                    'Grazing Legumes',
-                    'Cost-effective Grazing Legumes',
-                    '(Sharon et al) Emissions Reduction Target',
-                    '(Sharon et al) NDC Reduction Percent',
-                    '(Sharon et al) Reference Year Emissions Rate',
-                    '(Sharon et al) New Annual Emisions after target reached',
-                    'NDC Summary',
-                   ]]
-ndc_contrib.columns = ['iso3',
-              'geo',
-              'tia',
-              'tia_ce',
-              'refor',
-              'refor_ce',
-              'nut',
-              'nut_ce',
-              'opt_graz',
-              'opt_graz_ce',
-              'leg_graz',
-              'leg_graz_ce',
-              'targ',
-              'red_pct',
-              'ref_yr',
-              'new_emis',
-              'ndc_summ'
-              ]
-
+#ndc_contrib = ndc_contrib_raw.loc[:, ['iso3',
+#                    'CountryGeography',
+#                    'Trees in Agriculture Lands [Chapman]',
+#                    'Cost-effective Trees in Agriculture Lands [Chapman]',
+#                    'Reforestation (GROA)',
+#                    'Cost-effective Reforestation (GROA)',
+#                    'Nutrient Management',
+#                    'Cost-effective Nutrient Management',
+#                    'Optimal Grazing Intensity',
+#                    'Cost-effective Optimal Grazing Intensity',
+#                    'Grazing Legumes',
+#                    'Cost-effective Grazing Legumes',
+#                    '(Sharon et al) Emissions Reduction Target',
+#                    '(Sharon et al) NDC Reduction Percent',
+#                    '(Sharon et al) Reference Year Emissions Rate',
+#                    '(Sharon et al) New Annual Emisions after target reached',
+#                    'NDC Summary',
+#                   ]]
+#ndc_contrib.columns = ['iso3',
+#              'geo',
+#              'tia',
+#              'tia_ce',
+#              'refor',
+#              'refor_ce',
+#              'nut',
+#              'nut_ce',
+#              'opt_graz',
+#              'opt_graz_ce',
+#              'leg_graz',
+#              'leg_graz_ce',
+#              'targ',
+#              'red_pct',
+#              'ref_yr',
+#              'new_emis',
+#              'ndc_summ'
+#              ]
+#
 # calculate proportion of NDC goals that could be met by AF
-ndc_contrib['pct_tia'] = ndc_contrib['tia']/ndc_contrib['targ'] * 100
-ndc_contrib['pct_tia_ce'] = ndc_contrib['tia_ce']/ndc_contrib['targ'] * 100
-ndc_contrib['pct_refor'] = ndc_contrib['refor']/ndc_contrib['targ'] * 100
-ndc_contrib['pct_refor_ce'] = ndc_contrib['refor_ce']/ndc_contrib['targ'] * 100
-# calculate trees in ag as pct of refor and of other ag NCS
-ndc_contrib['tia_as_pct_refor'] = ndc_contrib['tia']/ndc_contrib['refor'] * 100
-ndc_contrib['tia_as_pct_refor_ce'] = ndc_contrib['tia_ce']/ndc_contrib['refor_ce'] * 100
-ndc_contrib['tia_as_pct_nut'] = ndc_contrib['tia']/ndc_contrib['nut'] * 100
-ndc_contrib['tia_as_pct_nut_ce'] = ndc_contrib['tia_ce']/ndc_contrib['nut_ce'] * 100
-ndc_contrib['tia_as_pct_opt_graz'] = ndc_contrib['tia']/ndc_contrib['opt_graz'] * 100
-ndc_contrib['tia_as_pct_opt_graz_ce'] = ndc_contrib['tia_ce']/ndc_contrib['opt_graz_ce'] * 100
-ndc_contrib['tia_as_pct_leg_graz'] = ndc_contrib['tia']/ndc_contrib['leg_graz'] * 100
-ndc_contrib['tia_as_pct_leg_graz_ce'] = ndc_contrib['tia_ce']/ndc_contrib['leg_graz_ce'] * 100
-# get rid of infs resulting from division by 0
-ndc_contrib.replace(np.inf, np.nan, inplace=True)
+#ndc_contrib['pct_tia'] = ndc_contrib['tia']/ndc_contrib['targ'] * 100
+#ndc_contrib['pct_tia_ce'] = ndc_contrib['tia_ce']/ndc_contrib['targ'] * 100
+#ndc_contrib['pct_refor'] = ndc_contrib['refor']/ndc_contrib['targ'] * 100
+#ndc_contrib['pct_refor_ce'] = ndc_contrib['refor_ce']/ndc_contrib['targ'] * 100
+## calculate trees in ag as pct of refor and of other ag NCS
+#ndc_contrib['tia_as_pct_refor'] = ndc_contrib['tia']/ndc_contrib['refor'] * 100
+#ndc_contrib['tia_as_pct_refor_ce'] = ndc_contrib['tia_ce']/ndc_contrib['refor_ce'] * 100
+#ndc_contrib['tia_as_pct_nut'] = ndc_contrib['tia']/ndc_contrib['nut'] * 100
+#ndc_contrib['tia_as_pct_nut_ce'] = ndc_contrib['tia_ce']/ndc_contrib['nut_ce'] * 100
+#ndc_contrib['tia_as_pct_opt_graz'] = ndc_contrib['tia']/ndc_contrib['opt_graz'] * 100
+#ndc_contrib['tia_as_pct_opt_graz_ce'] = ndc_contrib['tia_ce']/ndc_contrib['opt_graz_ce'] * 100
+#ndc_contrib['tia_as_pct_leg_graz'] = ndc_contrib['tia']/ndc_contrib['leg_graz'] * 100
+#ndc_contrib['tia_as_pct_leg_graz_ce'] = ndc_contrib['tia_ce']/ndc_contrib['leg_graz_ce'] * 100
+## get rid of infs resulting from division by 0
+#ndc_contrib.replace(np.inf, np.nan, inplace=True)
 
 
 
@@ -455,6 +459,9 @@ data_for_figs['agrofor_feasden_Mgha'] = data_for_figs['agrofor_feasden']/1e6
 ##########################################################################
 
 if make_map:
+
+    # load high-res countries, just for plots
+    countries_hi_res = gpd.read_file('./country_bounds/NewWorldFile_2020.shp')
 
     fig_0 = plt.figure(figsize=(12,15))
     gs = fig_0.add_gridspec(2, 1, height_ratios=[1.1, 1])
@@ -550,12 +557,12 @@ if make_map:
         else:
             bcax = None
         # plot land underneath
-        countries.to_crs(crs).plot(color='#f7f7f7',
-                                    linewidth=0.25,
-                                    edgecolor='none',
-                                    ax=ax,
-                                    zorder=0,
-                                    )
+        countries_hi_res.to_crs(crs).plot(color='#f7f7f7',
+                                          linewidth=0.25,
+                                          edgecolor='none',
+                                          ax=ax,
+                                          zorder=0,
+                                         )
         # plot Chapman data
         if map_dataset == 'Chapman':
             vmin = 5
@@ -583,22 +590,22 @@ if make_map:
                          zorder=1,
                         )
         # plot countries and continents
-        countries.to_crs(crs).plot(color='#dddddd22',
-                                    linewidth=0.25,
-                                    edgecolor='#9d9d9d',
-                                    ax=ax,
-                                    zorder=2,
-                                    )
-        for cont in continents.index.unique():
-            if cont not in ['Antarctica', 'Seven Seas']:
-                data = continents.reset_index()[continents.reset_index()['index'] == cont]
-                data.to_crs(crs).plot(color='none',
-                                       linewidth=0.25,
-                                       #edgecolor=data['color'].values[0],
-                                       edgecolor='#9d9d9d',
-                                       ax=ax,
-                                       zorder=2,
-                                       )
+        countries_hi_res.to_crs(crs).plot(color='#dddddd22',
+                                          linewidth=0.25,
+                                          edgecolor='#9d9d9d',
+                                          ax=ax,
+                                          zorder=2,
+                                         )
+        #for cont in continents.index.unique():
+        #    if cont not in ['Antarctica', 'Seven Seas']:
+        #        data = continents.reset_index()[continents.reset_index()['index'] == cont]
+        #        data.to_crs(crs).plot(color='none',
+        #                               linewidth=0.25,
+        #                               #edgecolor=data['color'].values[0],
+        #                               edgecolor='#9d9d9d',
+        #                               ax=ax,
+        #                               zorder=2,
+        #                               )
 
         # add locations
         if map_dataset == 'Chapman':
@@ -828,7 +835,7 @@ if make_plots:
                     data_for_figs['agrofor_feascum']))*100, a_min = 0, a_max = None)
     #gdp = pd.read_csv('./API_NY.GDP.MKTP.CD_DS2_en_csv_v2_3731268.csv', skiprows=4)
     #gdp_pcap = pd.read_csv('./API_NY.GDP.PCAP.CD_DS2_en_csv_v2_3731360.csv', skiprows=4)
-    hdi = pd.read_csv('Human Development Index (HDI)_w_ISO3_2000.csv')
+    hdi = pd.read_csv('./HDI_data/Human Development Index (HDI)_w_ISO3_2000.csv')
     data_w_hdi = pd.merge(data_for_figs, hdi.loc[:, ['Country Code', '2000']],
                           left_on='ISO_A3', right_on='Country Code')
     data_w_hdi['hdi'] = data_w_hdi['2000']

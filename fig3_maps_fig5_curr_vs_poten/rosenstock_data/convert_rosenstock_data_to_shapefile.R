@@ -3,7 +3,7 @@ library(readxl)
 library(sf)
 
 # load my country-recoding script
-source('../../../assorted_tools/recode_country_vector.r')
+source('./recode_country_vector.r')
 
 # load the Rosenstock et al. 2019 ("Making trees count: ...") database
 df = read_excel('./MRV_AgroforestryDatabase_FINAL.xlsx',
@@ -57,7 +57,7 @@ subdf.country.ISO3 = recode_country_vector(subdf$country, allow_dups=F)
 subdf['country_ISO3'] = subdf.country.ISO3
 
 # load a shapefile of TNC country boundaries
-shp = st_read('./NewWorldFile_2020.shp')
+shp = st_read('../country_bounds/NewWorldFile_2020.shp')
 
 # drop (or otherwise handle) problem rows
 keep.rows = !shp$CNTRY_NAME %in% c('Wake I.', 'Juan De Nova I.',
