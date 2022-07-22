@@ -571,69 +571,6 @@ for var in var_dict.keys():
 # make figure s3
 ################
 
-# assess variance in divergence from 1:1 line as fn of geo coord precision
-def calc_coord_precision(coord):
-    ct = 0
-    # return 0 if no decimals
-    if '.' not in str(coord):
-        return ct
-    str_dec = str(coord).split('.')[1]
-    for i, dig in enumerate(str_dec):
-        ct += 1
-        if i+1 == len(str_dec):
-            return ct
-        elif i+2 == len(str_dec):
-            if str_dec[i+1] == dig:
-                return ct
-            else:
-                return ct+1
-        else:
-            if str_dec[i+2] == str_dec[i+1] == dig:
-                return ct
-
-def calc_coord_precision_column(df):
-    lat_prec = [calc_coord_precision(lat) for lat in df.lat]
-    lon_prec = [calc_coord_precision(lon) for lon in df.lon]
-    prec_col = np.max(np.vstack((np.array(lat_prec), np.array(lon_prec))), axis=0)
-    # reclass the numeric coord_prec
-    class_bin_lefts= [1, 2, 3]
-    class_bin_rights = [2, 3, 10000]
-    class_bins = ['low', 'mod', 'high']
-    prec_bin_col = []
-    for val in prec_col:
-        for bin, l, r in zip(class_bins, class_bin_lefts, class_bin_rights):
-            if l<= val < r:
-                prec_bin_col.append(bin)
-    assert len(prec_bin_col) == len(prec_col)
-    return prec_col, prec_bin_col
-
-prec_col, prec_bin_col = calc_coord_precision_column(agb_comp)
-agb_comp['coord_prec'] = prec_col
-agb_comp['coord_prec_bin'] = prec_bin_col
-
-# print variances for low, mod, and high-precision coordinates,
-# and print results of Bartlett's test for equal variances
-# (for all normally distributed samples, since histograms look close enough)
-for _ in range(3):
-    print('-'*80)
-print('\n\n')
-print(('\n\nStandard deviations of differences between WHRC '
-       'remotely sensed estimates and\npublished AGC '
-       'for samples with different coordinate precisions:\n'))
-bins = ['low', 'mod', 'high']
-for prec_bin in bins:
-    std = agb_comp[agb_comp.coord_prec_bin==prec_bin]['stock_diff_whrc'].std()
-    print('\n\tprecision: %s\n\n\tstd: %0.4f\n\n' % (prec_bin, std))
-
-print(("\n\nResults of Levene's test of equal variances (for "
-       "non-normally-distributed samples):\n\n"))
-samples = [agb_comp[agb_comp['coord_prec_bin']==b][
-                                    'stock_diff_whrc'].values for b in bins]
-samples = [samp[np.invert(np.isnan(samp))] for samp in samples]
-levene = stats.levene(*samples)
-print('\n\tstat: %0.4f\n' % levene.statistic)
-print('\n\tp-value: %0.4f\n' % levene.pvalue)
-
 # assess correlation between divergence from 1:1 line and divergence of 2000
 # RS year from published measurement year
 for _ in range(3):
@@ -687,6 +624,115 @@ fig_yr_diff.subplots_adjust(left=0.2, right=0.97, bottom=0.15, top=0.93,
 fig_yr_diff.savefig('FIGS3_regression_WHRC_Cardinael_stock_diff_vs_meas_yr_diff.png',
                dpi=dpi)
 fig_yr_diff.show()
+
+# display % of measurements in 0, (0,5], (5,10], and (10, inf) year-diff bins
+pct_0 = len(agb_comp[(agb_comp['meas_yr_diff']==0)])/len(agb_comp)
+pct_0to5 = len(agb_comp[(np.abs(agb_comp['meas_yr_diff'])>0) &
+                        (np.abs(agb_comp['meas_yr_diff'])<=5)])/len(agb_comp)
+pct_5to10 = len(agb_comp[(np.abs(agb_comp['meas_yr_diff'])>5) &
+                         (np.abs(agb_comp['meas_yr_diff'])<=10)])/len(agb_comp)
+pct_gt10 = len(agb_comp[(agb_comp['meas_yr_diff']>10)])/len(agb_comp)
+assert np.allclose(np.sum((pct_0, pct_0to5, pct_5to10, pct_gt10)), 1)
+print('\n\n%0.2f%% measurements with no year difference' % (100*pct_0))
+print('\n\n%0.2f%% measurements with 0 < year difference <= 5' % (100*pct_0to5))
+print('\n\n%0.2f%% measurements with 5 < year difference <= 10' % (100*pct_5to10))
+print('\n\n%0.2f%% measurements with year difference > 10' % (100*pct_gt10))
+
+
+################
+# make figure s4
+################
+
+# assess variance in divergence from 1:1 line as fn of geo coord precision
+def estimate_coord_precision(coord):
+    ct = 0
+    # return 0 if no decimals
+    if '.' not in str(coord):
+        return ct
+    str_dec = str(coord).split('.')[1]
+    for i, dig in enumerate(str_dec):
+        ct += 1
+        if i+1 == len(str_dec):
+            return ct
+        elif i+2 == len(str_dec):
+            if str_dec[i+1] == dig:
+                return ct
+            else:
+                return ct+1
+        else:
+            if str_dec[i+2] == str_dec[i+1] == dig:
+                return ct
+
+def calc_coord_precision_column(df):
+    lat_prec = [estimate_coord_precision(lat) for lat in df.lat]
+    lon_prec = [estimate_coord_precision(lon) for lon in df.lon]
+    prec_col = (np.array(lat_prec) + np.array(lon_prec))/2
+    # reclass the numeric coord_prec
+    class_bin_lefts= [1, 2, 3]
+    class_bin_rights = [2, 3, 10000]
+    class_bins = ['low', 'mid', 'high']
+    prec_bin_col = []
+    for val in prec_col:
+        for bin, l, r in zip(class_bins, class_bin_lefts, class_bin_rights):
+            if l<= val < r:
+                prec_bin_col.append(bin)
+    assert len(prec_bin_col) == len(prec_col)
+    return prec_col, prec_bin_col
+
+prec_col, prec_bin_col = calc_coord_precision_column(agb_comp)
+agb_comp['coord_prec'] = prec_col
+agb_comp['coord_prec_bin'] = prec_bin_col
+
+# drop the few columns with precision > 6 (given that this is ~1.1 m precision,
+# standard circular accuracy for many GPS units, whereas a couple rows have
+# precision of 12, tantamount to ~micron precision! this was in original
+# dataset, so unclear where this originated upstream...)
+agb_comp = agb_comp[agb_comp['coord_prec']<=6]
+
+# add absolute stock-diff column
+agb_comp['stock_diff_whrc_abs'] = np.abs(agb_comp['stock_diff_whrc'])
+
+# assess correlation between coordinate precision and disagreement between
+# published and RS estimates
+for _ in range(3):
+    print('-'*80)
+print('\n\n')
+fig_prec, ax_prec = plt.subplots(1, 1, figsize=(6.5,6.5))
+for prac in pracs:
+    sub_agb_comp = agb_comp[agb_comp['practice'] == prac]
+    sns.scatterplot(x='coord_prec',
+                    y='stock_diff_whrc_abs',
+                    hue='practice',
+                    palette=[prac_colors[prac]],
+                    edgecolor='black',
+                    s=30,
+                    alpha=0.5,
+                    data=sub_agb_comp,
+                    legend=True,
+                    ax=ax_prec)
+sns.regplot(x='coord_prec', y='stock_diff_whrc_abs', data=agb_comp, scatter=False)
+ax_prec.set_xlabel(('approximate precision of published geographic '
+                       '\ncoordinates (decimal degrees)'), fontdict={'fontsize': 12})
+ax_prec.set_ylabel(('absolute stock estimate difference ($Mg\ C\ ha^{-1}$)\n'
+                       '|Cardinael data stock estmate - '
+                       'WHRC stock estimate|'), fontdict={'fontsize':12})
+ax_prec.tick_params(labelsize=8)
+agb_comp_reg = agb_comp.loc[:, ['stock_diff_whrc_abs', 'coord_prec']].dropna()
+print(('\n\nResults of regression of stock-estimate difference on coordinate-'
+       'precision:\n\n'))
+mod = OLS(agb_comp_reg['stock_diff_whrc_abs'],
+          np.vstack((np.ones(len(agb_comp_reg)),
+                     agb_comp_reg['coord_prec'])).T).fit()
+print('\n\tintercept: %0.4f $Mg\ C\ ha^{-1} (p=%0.2e)' % (mod.params['const'],
+                                          mod.pvalues['const']))
+print('\n\tslope: %0.4f $Mg\ C\ ha^{-1} yr^{-1} (p=%0.2e)' % (mod.params['x1'],
+                                      mod.pvalues['x1']))
+print('\n\tR-squared: %0.4f' % mod.rsquared)
+fig_prec.subplots_adjust(left=0.2, right=0.97, bottom=0.15, top=0.93,
+                            wspace=0, hspace=0)
+fig_prec.savefig(('FIGS4_regression_WHRC_Cardinael_stock_diff_vs_'
+                  'coord_precision.png'), dpi=dpi)
+fig_prec.show()
 
 
 

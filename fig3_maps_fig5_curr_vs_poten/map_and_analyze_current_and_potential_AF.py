@@ -101,7 +101,7 @@ af_locs = gpd.read_file(('AF_locations_from_papers/'
 #  https://raw.githubusercontent.com/milliechapman/treesincroplands/
 #  master/data/IUCN_ndc_agroforestry.csv)
 # then fold into the Rosenstock data to supplement it
-iucn = pd.read_csv(('./rosenstock_et_al_2019_data/'
+iucn = pd.read_csv(('./rosenstock_data/'
                     'supplemental_IUCN_NDC_data_from_Chapman_supps.csv'))
 iucn = iucn.iloc[:, :3]
 supplemented_NDCmnt = []
@@ -305,7 +305,6 @@ lesiv_rast = rxr.open_rasterio(os.path.join(rast_datadir,
                                chunks=(5,5),
                               )[0]
 lesiv_rast = lesiv_rast.rio.clip_box(map_minx, map_miny, map_maxx, map_maxy)
-lesiv_rast = (lesiv_rast==53).astype(np.int8)
 lesiv_rast = lesiv_rast.where(lesiv_rast==1, np.nan)
 # figure out if each location is covered by Chapman data or not
 in_lesiv = []
@@ -463,7 +462,7 @@ if make_map:
     # load high-res countries, just for plots
     countries_hi_res = gpd.read_file('./country_bounds/NewWorldFile_2020.shp')
 
-    fig_0 = plt.figure(figsize=(12,15))
+    fig_0 = plt.figure(figsize=(12,14))
     gs = fig_0.add_gridspec(2, 1, height_ratios=[1.1, 1])
 
     def format_map_axes(ax, bcax=None, max_tickval=None, add_latlon_lines=False):
@@ -553,9 +552,11 @@ if make_map:
         # axes at bottom for colorbar
         divider = make_axes_locatable(ax)
         if map_dataset == 'Chapman':
-            bcax = divider.append_axes("bottom", size="7%", pad=0.1)
+            bcax = divider.append_axes("bottom", size="7%", pad=0.2)
         else:
             bcax = None
+        # right axis for rolling average of AF site coverage
+        rax = divider.append_axes('right', size='10%', pad=0)
         # plot land underneath
         countries_hi_res.to_crs(crs).plot(color='#f7f7f7',
                                           linewidth=0.25,
@@ -633,14 +634,16 @@ if make_map:
         if map_dataset == 'Chapman':
             pct_in_chap = 100*np.sum(af_locs['in_chap'])/len(af_locs)
             pct_in_chap_in_af = 100*np.mean(af_locs['chap_val'][af_locs['in_chap']]>=5)
-            print(('\n\n%0.2f%% OF ALL SITES FALL WITHIN CHAPMAN DATA, '
+            print(('\n\n%0.2f%% OF ALL SITES FALL WITHIN CHAPMAN DATA '
+                   '(%0.2f%% MISSED), '
                    'AND %0.2f%% OF THOSE FALL WITHIN CHAPMAN \'AGROFORESTRY\''
                    ' PIXELS (i.e., PIXELS >= 5 Mg C ha^-1)\n\n') %
-                  (pct_in_chap, pct_in_chap_in_af))
+                  (pct_in_chap, 100-pct_in_chap, pct_in_chap_in_af))
         elif map_dataset == 'Lesiv':
             pct_in_lesiv = 100*np.sum(af_locs['in_lesiv'])/len(af_locs)
-            print(('\n\n%0.2f%% OF ALL SITES FALL WITHIN LESIV DATA'
-                   '\n\n') % pct_in_lesiv)
+            print(('\n\n%0.2f%% OF ALL SITES FALL WITHIN LESIV DATA '
+                   '(%0.2f%% MISSED)'
+                   '\n\n') % (pct_in_lesiv, 100-pct_in_lesiv))
 
         # fix the colorbar and set ticks and labels
         if map_dataset == 'Chapman':
@@ -658,11 +661,48 @@ if make_map:
         label = {'Chapman': 'A.', 'Lesiv': 'B.'}[map_dataset]
         ax.text(1.13*map_minx, 0.88*map_maxy, label, size=28, weight='bold', clip_on=False)
 
+        # plot rolling average of AF site omission at the right
+        if map_dataset == 'Chapman':
+            in_data_col = 'in_chap'
+        else:
+            in_data_col = 'in_lesiv'
+        rolling_lat = af_locs.to_crs(crs).sort_values(by='lat',
+                                                ascending=False).geometry.y
+        rolling_coverage_chap = af_locs.to_crs(crs).sort_values(by='lat',
+                    ascending=False)['in_chap'].rolling(window=50,
+                                                          min_periods=1,
+                                                          center=False).mean()
+        rolling_coverage_lesiv = af_locs.to_crs(crs).sort_values(by='lat',
+                    ascending=False)['in_lesiv'].rolling(window=50,
+                                                          min_periods=1,
+                                                          center=False).mean()
+        chap_alpha = 1
+        lesiv_alpha = 0.33
+        chap_linestyle = '-'
+        lesiv_linestyle = ':'
+        if map_dataset == 'Lesiv':
+            chap_alpha, lesiv_alpha = lesiv_alpha, chap_alpha
+            chap_linestyle, lesiv_linestyle = lesiv_linestyle, chap_linestyle
+        rax.plot(rolling_coverage_chap, rolling_lat, color='black',
+                 linewidth=1, alpha=chap_alpha, linestyle=chap_linestyle)
+        rax.plot(rolling_coverage_lesiv, rolling_lat, color='black',
+                 linewidth=1, alpha=lesiv_alpha, linestyle=lesiv_linestyle)
+        rax.set_xlim([0, 1])
+        rax.set_ylim(ax.get_ylim())
+        rax.set_xlabel('coverage', fontdict={'fontsize':13})
+        rax.set_xticks([0,0.5,1])
+        rax.tick_params(labelsize=12)
+        rax.set_ylabel('')
+        rax.set_yticks(())
+        rax.xaxis.set_label_position('top')
+        #rax.xaxis.tick_top()
+
+
     fig_0.subplots_adjust(left=0.06,
                           bottom=0,
                           right=0.98,
                           top=1,
-                          hspace=0.15,
+                          hspace=0,
                          )
     fig_0.show()
 

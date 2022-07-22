@@ -28,7 +28,7 @@ col_3dec = '#8306bf'
 # load and preprocess data
 ##########################
 # read in our points collected from the lit
-af_locs = pd.read_excel(('../mapping/AF_locations_from_papers/'
+af_locs = pd.read_excel(('../fig3_maps_fig5_curr_vs_poten/AF_locations_from_papers/'
                          'Agroforestry Data Dec 2021_MERGED_METANALYSES.xlsx'),
                         sheet_name='S2 sites')
 
@@ -157,7 +157,7 @@ for dim, dim_list in standard.items():
 ##################################
 
 # assess variance in divergence from 1:1 line as fn of geo coord precision
-def calc_coord_precision(coord):
+def estimate_coord_precision(coord):
     ct = 0
     # return 0 if no decimals
     if '.' not in str(coord):
@@ -177,8 +177,8 @@ def calc_coord_precision(coord):
                 return ct
 
 def calc_coord_precision_column(df):
-    lat_prec = [calc_coord_precision(lat) for lat in df.lat]
-    lon_prec = [calc_coord_precision(lon) for lon in df.lon]
+    lat_prec = [estimate_coord_precision(lat) for lat in df.lat]
+    lon_prec = [estimate_coord_precision(lon) for lon in df.lon]
     prec_col = (np.array(lat_prec) + np.array(lon_prec))/2
     # reclass the numeric coord_prec
     class_bin_lefts= [1, 2, 3]

@@ -1,5 +1,5 @@
 ### overview:
-This repo contains code and small static data files used for our 'state of the knowledge' perspective piece on agroforestry as an NCS (Terasaki Hart et al. 2022).
+This repo contains code and some data files used for our 'state of the knowledge' perspective piece on agroforestry as an NCS (Terasaki Hart et al. 2022).
 
 # < PUT CITATION HERE >
 
@@ -31,7 +31,7 @@ Analyses were run in two major stages, so directories of content are organized t
 7. Download the resulting GeoTIFFs (to `./GEE_tif_output`) and shapefiles (to `./GEE_shp_output`), from Google Cloud storage and Google Drive, respectively.
 8. Run `./GEE_tif_output/reproject_chapman_lesiv.sh1` to warp rasters from GEE's output EPSG:4326 to target global equal-area projection (ESRI:54012; world Eckert IV).
 9. Manually choose from the current draft GROA-AF database an AF site with high-enough coordinate precision to be visually identified in Google Earth aerial imagery, and with decent-enough temporal coverage in the Google Earth aerial imagery archive to show temporal dynamics
-10. Run `./GEE_code/get_fig4_data.js` on GEE to load, prep, and map the aerial basemap and satellite RGB maps used in Fig 4, as well as the purple precision radii and polygons to frame the data up for screenshotting; NOTE: THE CODE FROM THIS SCRIPT IS SHARED, BUT HAS BEEN REDACTED TO PRESERVE CONFIDENTIALITY OF THE SITE CHOSEN.
+10. Run `./GEE_code/get_fig4_imagery.js` on GEE to load, prep, and map the aerial basemap and satellite RGB maps used in Fig 4, as well as the purple precision radii and polygons to frame the data up for screenshotting; NOTE: THE CODE FROM THIS SCRIPT IS SHARED, BUT HAS BEEN REDACTED TO PRESERVE CONFIDENTIALITY OF THE SITE CHOSEN.
 11. Take screenshots of each map at the same zoom level and framed within the framing polygons produced by the script (for Fig. 4b), and also at a coarser zoom level (for Fig. 4a), using the default Ubuntu screenshotting tool, and naming files by dataset and date.
 12. Use Google Earth desktop app to create identical framing polygons and then capture screenshots of historical Google Earth aerial imagery in the identical spatial extent and at identical zoom, naming files by dataset and date. 
 13. Manually download all PDFs from which Cardinael et al. 2018 collected data, review each PDF, and record or estimate date of data collection as precisely as possible, then save in an altered version of 'Cardinael_et_al_2018_ERL_Database_AFS_Biomass.xlsx', as column 'MEAS_YR' (naming new file 'Cardinael_et_al_2018_ERL_Database_AFS_Biomass_BT_DETH_MEAS_YR_ADDED.xlsx'). (NOTE: intials in filename refer to fact that this work was done by authors Bhuwan Thapa and Drew Terasaki Hart.)
@@ -42,7 +42,7 @@ Analyses were run in two major stages, so directories of content are organized t
 
 ## analysis component B:
 
-1. Run `./fig2_figS2_figS3_pubd_and_RS_C_analyses/compare_AGB_and_SOC_in_pubs_and_RS.py` to produce comparison between SOC and AGB and between in situ and remotely sensed AGB values ('FIG2_C_density_pub_rs_comp_plot.png'), to analyze divergence between in situ and RS estimates as a function of temporal divergence ('FIGS3_regression_WHRC_Cardinael_stock_diff_vs_meas_yr_diff.png'), and to plot AGC, BGC, and SOC as a function of stem density ('FIGS2_C_vs_stem_density_scatters.png').
+1. Run `./fig2_figS2_figS3_figS4_pubd_and_RS_C_analyses/compare_AGB_and_SOC_in_pubs_and_RS.py` to produce comparison between SOC and AGB and between in situ and remotely sensed AGB values ('FIG2_C_density_pub_rs_comp_plot.png'), to analyze divergence between in situ and RS estimates as a function of temporal divergence ('FIGS3_regression_WHRC_Cardinael_stock_diff_vs_meas_yr_diff.png'), and to plot AGC, BGC, and SOC as a function of stem density ('FIGS2_C_vs_stem_density_scatters.png').
 
 
 ## analysis component C:

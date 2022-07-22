@@ -31,7 +31,7 @@ df.columns = [col.replace('.', '_') for col in df.columns]
 
 # function for handling strings with degree and minute signs in them
 def handle_deg_min_str(val):
-    dir = re.split(' ', val.strip())[-1]
+    dir = re.split(' ', val.strip())[-1].strip()
     assert dir in ['E', 'W', 'N', 'S']
     split_vals = [substr.strip() for substr in re.split('to', val)]
     assert len(split_vals) == 2
@@ -42,7 +42,7 @@ def handle_deg_min_str(val):
         deg = float(deg)
         min = float(min)
         dec_val = deg + (min /60)
-        if dir in ['W', 'S']:
+        if dir.strip() in ['W', 'S']:
             dec_val *= -1
         dec_vals.append(dec_val)
     assert len(dec_vals) == 2
@@ -67,7 +67,8 @@ def handle_NSEW_str(val):
 # decimal-degree lat, lon values, if decimal-degree coordinates are initially
 # missing, else just return existing decimal-degree lat/lon values
 def calc_dec_lat_lon(row):
-    if pd.notnull(row['lat']) and pd.notnull(row['lon']):
+    if (pd.notnull(row['lat']) and pd.notnull(row['lon']) and
+        len(str(row['lat']).strip()) > 0 and len(str(row['lon']).strip()) > 0):
         dec_vals = [row['lat'], row['lon']]
         for i, val in enumerate(dec_vals):
             if (isinstance(val ,str) and
@@ -106,7 +107,7 @@ def calc_dec_lat_lon(row):
                 # decimal degrees
                 deg, min, sec, dir = row[cols].values
                 dec = deg + (min + (sec/60))/60
-                if dir in ['W', 'S']:
+                if dir.strip() in ['W', 'S']:
                     dec *= -1
                 dec_vals.append(dec)
         except Exception:
@@ -149,9 +150,12 @@ df['lon_trunc'] = np.round(df['lon'] ,n_coords_dec_for_dedup)
 # remove duplicate coords (out to specifed number of decimal places)
 df = df.drop_duplicates(subset = ['lon_trunc', 'lat_trunc'])
 
-# cull problem site.id values
+# cull problem site.id values (errors trace back to original publications, so
+# cannot by corrected by us)
 df =df[df.site_id != '17169']
 df =df[df.site_id != 17169]
+df =df[df.site_id != '19419']
+df =df[df.site_id != 19419]
 
 # scatter points, if requested
 if plot_it:
