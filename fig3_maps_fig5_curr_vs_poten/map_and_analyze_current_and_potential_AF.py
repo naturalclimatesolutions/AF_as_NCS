@@ -74,10 +74,6 @@ roe = pd.read_excel('./roe_data/Roe_et_al_SI.xlsx',
                     sheet_name='1. Sectoral mitigation-country',
                     skiprows=10)
 
-# TODO: DELETE ME:
-#ndc_contrib_raw = pd.read_csv(('./baruch-mordo_data/pathway_mitigation_potential_and_NDC'
-#                               '_targets_with_ISO3.csv'))
-
 af_locs = gpd.read_file(('AF_locations_from_papers/'
                          'AF_locations_from_meta-analyses.shp'))
                          #'AF_locations_from_meta-analyses_W_LESIV.shp'))
@@ -361,66 +357,6 @@ potential['wt_avg_density'] = (((potential['area_crop'] *
                                 (potential['area_pasture'] *
                                  potential['density_pasture'])) /
                                potential['total_area'])
-
-
-# TODO: DELETE ME
-# prep NDC contributions analysis
-# subset and rename cols
-#ndc_contrib = ndc_contrib_raw.loc[:, ['iso3',
-#                    'CountryGeography',
-#                    'Trees in Agriculture Lands [Chapman]',
-#                    'Cost-effective Trees in Agriculture Lands [Chapman]',
-#                    'Reforestation (GROA)',
-#                    'Cost-effective Reforestation (GROA)',
-#                    'Nutrient Management',
-#                    'Cost-effective Nutrient Management',
-#                    'Optimal Grazing Intensity',
-#                    'Cost-effective Optimal Grazing Intensity',
-#                    'Grazing Legumes',
-#                    'Cost-effective Grazing Legumes',
-#                    '(Sharon et al) Emissions Reduction Target',
-#                    '(Sharon et al) NDC Reduction Percent',
-#                    '(Sharon et al) Reference Year Emissions Rate',
-#                    '(Sharon et al) New Annual Emisions after target reached',
-#                    'NDC Summary',
-#                   ]]
-#ndc_contrib.columns = ['iso3',
-#              'geo',
-#              'tia',
-#              'tia_ce',
-#              'refor',
-#              'refor_ce',
-#              'nut',
-#              'nut_ce',
-#              'opt_graz',
-#              'opt_graz_ce',
-#              'leg_graz',
-#              'leg_graz_ce',
-#              'targ',
-#              'red_pct',
-#              'ref_yr',
-#              'new_emis',
-#              'ndc_summ'
-#              ]
-#
-# calculate proportion of NDC goals that could be met by AF
-#ndc_contrib['pct_tia'] = ndc_contrib['tia']/ndc_contrib['targ'] * 100
-#ndc_contrib['pct_tia_ce'] = ndc_contrib['tia_ce']/ndc_contrib['targ'] * 100
-#ndc_contrib['pct_refor'] = ndc_contrib['refor']/ndc_contrib['targ'] * 100
-#ndc_contrib['pct_refor_ce'] = ndc_contrib['refor_ce']/ndc_contrib['targ'] * 100
-## calculate trees in ag as pct of refor and of other ag NCS
-#ndc_contrib['tia_as_pct_refor'] = ndc_contrib['tia']/ndc_contrib['refor'] * 100
-#ndc_contrib['tia_as_pct_refor_ce'] = ndc_contrib['tia_ce']/ndc_contrib['refor_ce'] * 100
-#ndc_contrib['tia_as_pct_nut'] = ndc_contrib['tia']/ndc_contrib['nut'] * 100
-#ndc_contrib['tia_as_pct_nut_ce'] = ndc_contrib['tia_ce']/ndc_contrib['nut_ce'] * 100
-#ndc_contrib['tia_as_pct_opt_graz'] = ndc_contrib['tia']/ndc_contrib['opt_graz'] * 100
-#ndc_contrib['tia_as_pct_opt_graz_ce'] = ndc_contrib['tia_ce']/ndc_contrib['opt_graz_ce'] * 100
-#ndc_contrib['tia_as_pct_leg_graz'] = ndc_contrib['tia']/ndc_contrib['leg_graz'] * 100
-#ndc_contrib['tia_as_pct_leg_graz_ce'] = ndc_contrib['tia_ce']/ndc_contrib['leg_graz_ce'] * 100
-## get rid of infs resulting from division by 0
-#ndc_contrib.replace(np.inf, np.nan, inplace=True)
-
-
 
 
 

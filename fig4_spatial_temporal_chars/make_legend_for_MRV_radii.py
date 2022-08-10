@@ -15,15 +15,6 @@ col_2dec = '#cd74f7'
 col_3dec = '#8306bf'
 
 
-# TODO:
-    # switch to using our own points, before processing for Fig. 3 maps
-    # drop all Google Maps (and report percent)
-    # drop all strings (and report percent)
-    # reproduce legend
-    # update caption and text and methods to reflect these changes
-
-
-
 ##########################
 # load and preprocess data
 ##########################
@@ -51,8 +42,8 @@ has_dec_coords = np.logical_and(*[pd.notnull(df[col]) for col in ['lat',
 has_dms_coords = np.logical_and(*[pd.notnull(df[col]) for col in ['lat_deg',
                                                                   'long_deg']])
 has_coords = np.logical_or(has_dec_coords, has_dms_coords)
-print(('\n\n%0.2f%% OF ORIGINAL COLUMNS '
-       '(%i of %i cols) HAVE NO COORDS\n'
+print(('\n\n%0.2f%% OF ORIGINAL ROWS '
+       '(%i of %i rows) HAVE NO COORDS\n'
        '\n' % ( 100*(1-np.sum(has_coords)/orig_len),
                np.sum(np.invert(has_coords)),
                orig_len)))
@@ -68,8 +59,8 @@ dms_cols = ['lat_deg', 'lat_min', 'lat_sec', 'long_deg', 'long_min', 'long_sec']
 has_str_dms_coords = np.bool8(np.sum(np.stack([df[col].apply(
                                 str_fn) for col in dms_cols]), axis=0))
 has_str_coords = np.logical_or(has_str_dec_coords, has_str_dms_coords)
-print(('\n\n%0.2f%% OF ORIGINAL COLUMNS '
-       '(%i of %i cols) HAD COORDS EXPRESSED AS RANGES OR '
+print(('\n\n%0.2f%% OF ORIGINAL ROWS '
+       '(%i of %i rows) HAD COORDS EXPRESSED AS RANGES OR '
        'OTHERWISE EXPRESSED AS STRINGS\n'
        '\n') % (100*(np.sum(has_str_coords)/orig_len),
                 np.sum(has_str_coords),
@@ -84,8 +75,8 @@ for ref in df['other.reference']:
     else:
         used_google.append(False)
 assert len(used_google) == len(df)
-print(('\n\n%0.2f%% OF ORIGINAL COLUMNS '
-       '(%i of %i cols) HAD COORDS THAT WERE GATHERED USING '
+print(('\n\n%0.2f%% OF ORIGINAL ROWS '
+       '(%i of %i rows) HAD COORDS THAT WERE GATHERED USING '
        'GOOGLE MAPS OR GOOGLE EARTH\n'
        '\n') % (100*(np.sum(used_google)/orig_len),
                 np.sum(used_google),
@@ -93,13 +84,16 @@ print(('\n\n%0.2f%% OF ORIGINAL COLUMNS '
 
 keep_idxs = np.logical_and(np.logical_and(has_coords, np.invert(has_str_coords)),
                            np.invert(used_google))
-print(('\n\nDROPPING %0.2f%% OF ORIGINAL COLUMNS '
-       '(%i of %i cols) BECAUSE OF NO COORDS, STRING COORDS, '
+print(('\n\nDROPPING %0.2f%% OF ORIGINAL ROWS '
+       '(%i of %i rows) BECAUSE OF NO COORDS, STRING COORDS, '
        'OR COORDS DERIVED FROM GOOGLE\n'
        '\n') % (100*(1-np.sum(keep_idxs)/orig_len),
                 orig_len - np.sum(keep_idxs),
                 orig_len))
 df = df[keep_idxs]
+
+print('\n\nANALYZING %i ROWS FROM %i STUDIES\n\n' % (len(df),
+                                                len(df['study.id'].unique())))
 
 # make sure there are no remaining strings in the non-DMS coord columns
 for i, row in df.iterrows():

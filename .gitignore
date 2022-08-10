@@ -9,6 +9,7 @@
 *.xlsx
 *.odg
 *.fix
+*.docx
 __pycache__
 delete_me/
 fig3_maps_fig5_curr_vs_poten/rosenstock_data/*.xlsx

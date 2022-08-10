@@ -47,8 +47,10 @@ print('\n\n%0.2f%% OF STUDIES COVERED ONLY ONCE\n\n' % (
       df_barplot[df_barplot['coverage']==1]['count']/df_barplot['count'].sum()*100))
 
 # print max coverage for any primary study
-print('\n\n%i STUDIES HAVE THE MAX OBSERVED COVERAGE OF %i \n\n' % (
+print('\n\nTHE FOLLOWING %i STUDIES HAVE THE MAX OBSERVED COVERAGE OF %i:\n\n' % (
       df_barplot[df_barplot['coverage'] == df_barplot['coverage'].max()]['count'],
       df_barplot['coverage'].max()))
+print(df[df['coverage'] == df['coverage'].max()][['citations.author',
+                                                  'citations.title']])
 
 
