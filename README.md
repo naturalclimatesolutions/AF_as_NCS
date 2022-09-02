@@ -1,5 +1,10 @@
 ### overview:
-This repo contains code and some data files used for our 'state of the knowledge' perspective piece on agroforestry as an NCS (Terasaki Hart et al. 2022).
+This repo contains code and some data files used for our 'state of the knowledge' perspective piece: "Agroforestry
+as a climate solution: moving from potential to practice" (Terasaki Hart et al. 2022).
+
+Code was written by Drew Ellison Terasaki Hart,
+and is available to freely distribute and modify, with proper
+attribution, under the MIT License.
 
 # < PUT CITATION HERE >
 

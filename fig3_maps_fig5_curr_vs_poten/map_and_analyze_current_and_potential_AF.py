@@ -953,3 +953,7 @@ if make_plots:
             )
         print('\n\nT-TEST OF POTENTIAL DENSITY IN AF-NDC VS. NON-AF-NDC NATIONS:\n')
         print(test)
+        print('\n%i NDC countries; %i non-NDC countries\n\n' % (
+            len(data_for_figs[data_for_figs['NDC'] == 'yes']['wt_avg_density']),
+            len(data_for_figs[data_for_figs['NDC'] == 'no']['wt_avg_density'])))
+
