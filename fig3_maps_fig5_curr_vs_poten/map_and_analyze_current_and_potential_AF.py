@@ -398,9 +398,6 @@ if make_map:
     # load high-res countries, just for plots
     countries_hi_res = gpd.read_file('./country_bounds/NewWorldFile_2020.shp')
 
-    fig_0 = plt.figure(figsize=(12,14))
-    gs = fig_0.add_gridspec(2, 1, height_ratios=[1.1, 1])
-
     def format_map_axes(ax, bcax=None, max_tickval=None, add_latlon_lines=False):
         """
         Function to custom format map images
@@ -477,6 +474,8 @@ if make_map:
 
     for map_dataset, rast in zip(['Chapman', 'Lesiv'], [chap_rast, lesiv_rast]):
 
+        fig_map = plt.figure(figsize=(12,7))
+
         crs = rast.rio.crs
 
         map_pal = palettable.cmocean.sequential.Algae_3.mpl_colormap
@@ -484,7 +483,7 @@ if make_map:
         if map_dataset == 'Chapman':
             soil_color = palettable.cmocean.sequential.Speed_20.mpl_colormap(2)
             map_pal.set_under(soil_color)
-        ax = fig_0.add_subplot(2, 1, 1+(map_dataset=='Lesiv'))
+        ax = fig_map.add_subplot(1, 1, 1)
         # axes at bottom for colorbar
         divider = make_axes_locatable(ax)
         if map_dataset == 'Chapman':
@@ -533,16 +532,6 @@ if make_map:
                                           ax=ax,
                                           zorder=2,
                                          )
-        #for cont in continents.index.unique():
-        #    if cont not in ['Antarctica', 'Seven Seas']:
-        #        data = continents.reset_index()[continents.reset_index()['index'] == cont]
-        #        data.to_crs(crs).plot(color='none',
-        #                               linewidth=0.25,
-        #                               #edgecolor=data['color'].values[0],
-        #                               edgecolor='#9d9d9d',
-        #                               ax=ax,
-        #                               zorder=2,
-        #                               )
 
         # add locations
         if map_dataset == 'Chapman':
@@ -593,10 +582,6 @@ if make_map:
         # call map-formatting fn
         format_map_axes(ax, bcax, add_latlon_lines=add_latlon_lines)
 
-        # add letter label to figure sections
-        label = {'Chapman': 'A.', 'Lesiv': 'B.'}[map_dataset]
-        ax.text(1.13*map_minx, 0.88*map_maxy, label, size=28, weight='bold', clip_on=False)
-
         # plot rolling average of AF site omission at the right
         if map_dataset == 'Chapman':
             in_data_col = 'in_chap'
@@ -612,17 +597,11 @@ if make_map:
                     ascending=False)['in_lesiv'].rolling(window=50,
                                                           min_periods=1,
                                                           center=False).mean()
-        chap_alpha = 1
-        lesiv_alpha = 0.33
-        chap_linestyle = '-'
-        lesiv_linestyle = ':'
-        if map_dataset == 'Lesiv':
-            chap_alpha, lesiv_alpha = lesiv_alpha, chap_alpha
-            chap_linestyle, lesiv_linestyle = lesiv_linestyle, chap_linestyle
-        rax.plot(rolling_coverage_chap, rolling_lat, color='black',
-                 linewidth=1, alpha=chap_alpha, linestyle=chap_linestyle)
-        rax.plot(rolling_coverage_lesiv, rolling_lat, color='black',
-                 linewidth=1, alpha=lesiv_alpha, linestyle=lesiv_linestyle)
+        coverage_dict = {'Chapman': rolling_coverage_chap,
+                         'Lesiv': rolling_coverage_lesiv,
+                        }
+        rax.plot(coverage_dict[map_dataset], rolling_lat, color='black',
+                 linewidth=1, alpha=1, linestyle='-')
         rax.set_xlim([0, 1])
         rax.set_ylim(ax.get_ylim())
         rax.set_xlabel('coverage', fontdict={'fontsize':13})
@@ -634,17 +613,21 @@ if make_map:
         #rax.xaxis.tick_top()
 
 
-    fig_0.subplots_adjust(left=0.06,
-                          bottom=0,
-                          right=0.98,
-                          top=1,
-                          hspace=0,
-                         )
-    fig_0.show()
+        fig_map.subplots_adjust(left=0.02,
+                              bottom=0 + (0.05*(map_dataset == 'Chapman')),
+                              right=0.98,
+                              top=1,
+                              hspace=0,
+                             )
+        fig_map.show()
 
-    if save_it:
-        fig_0.savefig('FIG3_AF_maps_and_known_AF_locs.png',
-                     dpi=dpi, orientation='landscape')
+        if save_it:
+            fignum_dict = {'Chapman': '3',
+                            'Lesiv': 'S6',
+                          }
+            fig_map.savefig('FIG%s_%s_AF_map_and_known_AF_locs.png' %
+                            (fignum_dict[map_dataset], map_dataset),
+                            dpi=dpi, orientation='landscape')
 
 
 

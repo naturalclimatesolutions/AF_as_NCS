@@ -3,6 +3,7 @@ import geopandas as gpd
 import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.colors as colors
+from matplotlib.lines import Line2D
 from matplotlib.patches import Polygon
 from matplotlib.collections import PatchCollection
 from mpl_toolkits.axes_grid1 import make_axes_locatable
@@ -266,9 +267,9 @@ agb_comp['in_chap'] = ((pd.notnull(agb_comp['whrc_stock'])) &
                        (pd.notnull(agb_comp['chap_stock'])))
 
 
-###############
-# make figure 2
-###############
+#######################
+# make figures 2 and s3
+#######################
 
 # get array of all the practices
 pracs = agb_comp.practice.unique()
@@ -287,13 +288,15 @@ prac_colors = dict(zip(pracs, palette))
 soc_comp = all[all['var'] == 'soc']
 soc_comp['card_stock_change_log'] = np.log10(soc_comp['stock_change'])
 
-# make the figure
+# make the ridgeline figure and add axes in gridspec
 plt.close('all')
-fig = plt.figure(figsize=(6.75, 10))
-# NOTE: add all KDE axes, an empty set of axes (to help w/ spacing), then
-#       scatter axes
-gs = fig.add_gridspec(2+len(pracs), 1,
-                      height_ratios=([0.25]*(len(pracs)))+[0.22]+[1])
+fig_ridge = plt.figure(figsize=(6.75, 5))
+gs = fig_ridge.add_gridspec(len(pracs), 1, height_ratios=([0.25]*(len(pracs))))
+
+# make scatterplot fig and axes
+fig_scat = plt.figure(figsize=(6.75, 5))
+ax_scat = fig_scat.add_subplot(1,1,1)
+
 # replace true zeros with 0.001, then manually relabel the axes, to be able to
 # use log-log scale but still reflect true 0s
 agb_comp['whrc_stock_false0'] = agb_comp.whrc_stock.apply(
@@ -302,8 +305,8 @@ agb_comp['whrc_stock_false0_log'] = np.log10(agb_comp['whrc_stock_false0'])
 agb_comp['card_stock_change_log'] = np.log10(agb_comp['card_stock_change'])
 col = 'whrc_stock_false0_log'
 dataset_label = 'WHRC et al. unpub. 2022'
-# make the scatterplot at top
-ax_scat = fig.add_subplot(gs[-1,:])
+
+# make the scatterplot
 ax_scat.plot([-100, 100], [-100, 100], ':k', alpha=0.3)
 # choose centrality metric
 cent_met = 'mean' # 'median'
@@ -336,7 +339,7 @@ print('\n\nPercent decrease using all points: %0.2f%%\n\n' % (
 
 
 # label axes
-ax_scat.set_xlabel('published C density\n($log_{10}\ Mg\ C\ ha^{-1}$)',
+ax_scat.set_xlabel('field-measured AGC density\n($log_{10}\ Mg\ C\ ha^{-1}$)',
                    fontdict={'fontsize':14})
 ax_scat.set_ylabel('remotely sensed AGC density\n($log_{10}\ Mg\ C\ ha^{-1}$)',
                    fontdict={'fontsize': 14})
@@ -360,6 +363,29 @@ for prac in pracs:
                     legend=False,
                     ax=ax_scat)
     total_n_pts += len(sub_agb_comp)
+# add manual legend
+legend_elements = []
+for prac, color in prac_colors.items():
+    label = prac
+    element = Line2D([0], [0],
+                     marker='o',
+                     color='none',
+                     markerfacecolor=color,
+                     markeredgecolor='none',
+                     label=prac,
+                     markersize=6,
+                    )
+    legend_elements.append(element)
+lgd = ax_scat.legend(handles=legend_elements,
+                     loc='lower left',
+                     bbox_to_anchor=(0.09, 0.17, 0.15, 0.2),
+                     prop={'size': 8},
+                     title='',
+                     fancybox=False,
+                     shadow=False,
+                     ncol=1,
+                    )
+
 print('\n\n%i POINTS SCATTERED IN TOTAL\n\n' % total_n_pts)
 # set tick locations and labels, axis limits
 tick_locs = [-2, -1, 0, 1, 2, 3]
@@ -378,9 +404,6 @@ ax_scat.set_xticks(x_tick_locs, x_tick_labs)
 ax_scat.set_yticks(tick_locs, tick_labs)
 ax_scat.set_xlim(x_ax_lims)
 ax_scat.set_ylim(ax_lims)
-# add label for figure part 'B'
-ax_scat.text(1.6*ax_scat.get_xlim()[0], 0.85*ax_scat.get_ylim()[1], 'B.',
-             size=24, weight='bold', color='black', clip_on=False)
 
 # add broken-stick indicator
 tick_locs_spacing = np.diff(tick_locs[:2])[0]
@@ -407,28 +430,18 @@ ax_scat.add_patch(zero_poly)
 #ax_scat.plot(ax_scat.get_xlim(), [tick_locs[0]]*2,
 #             ':r', linewidth=0.75, alpha=0.85, zorder=0)
 
-# add horizontal line at top, to visually separate parts A. and B.
-ax_scat.plot([-2.1, ax_scat.get_xlim()[1]],
-             [ax_scat.get_ylim()[1]]*2,
-             '-k', linewidth=2.5,
-             clip_on=False)
-
 # add gridlines
 ax_scat.grid(zorder=0, linestyle=':', color='gray', alpha=0.75, linewidth=0.5)
-# and extend gridlines vertically under KDEs
-for x in ax_scat.get_xticks():
-    ax_scat.plot([x,x], [ax_scat.get_ylim()[0], 6.565],
-                 linestyle=':', color='gray', linewidth=0.5, alpha=0.75,
-                 zorder=0, clip_on=False)
 
 # get practice medians
 agb_meds = np.log10(agb_comp.groupby('practice').median().loc[:,['card_stock_change']])
 #agb_meds_rs = agb_comp.groupby('practice').median().loc[:,['whrc_stock_false0_log']]
 soc_meds = np.log10(soc_comp[soc_comp['stock_change']>0].groupby('practice').median().loc[:,['stock_change']])
 sorted_pracs = agb_meds.sort_values('card_stock_change').index.values
+
 # plot each of the AGB and SOC KDEs
 for prac_i, prac in enumerate(sorted_pracs):
-    ax_kde = fig.add_subplot(gs[prac_i, :])
+    ax_kde = fig_ridge.add_subplot(gs[prac_i, :])
     sub_agb_comp = agb_comp.loc[agb_comp['practice'] == prac, ['practice',
                                                            'card_stock_change_log']]
     sub_soc_comp = soc_comp.loc[soc_comp['practice'] == prac, ['practice',
@@ -474,12 +487,13 @@ for prac_i, prac in enumerate(sorted_pracs):
                 color=prac_colors[prac], clip_on=False)
     ax_kde.set_ylim((0.8, -0.8)) #NOTE: lims inverted bc violinplot inverts y ax
     ax_kde.set_xlim(x_ax_lims)
-    # add vertical lines to visually line up kde axes with scatter axes,
-    # and a horizontal line on the top axes, to close off the 'box'
-    ax_kde.plot([x_ax_lims[0]]*2, [-0.8,2], color='black', linewidth=0.75,
-                clip_on=False)
-    ax_kde.plot([x_ax_lims[1]]*2, [-0.8,2], color='black', linewidth=0.75,
-                clip_on=False)
+    #if prac_i != len(sorted_pracs)-1:
+        # add vertical lines to visually line up kde axes with scatter axes,
+        # and a horizontal line on the top axes, to close off the 'box'
+        #ax_kde.plot([x_ax_lims[0]]*2, [-0.8,2], color='black', linewidth=0.75,
+        #            clip_on=False)
+        #ax_kde.plot([x_ax_lims[1]]*2, [-0.8,2], color='black', linewidth=0.75,
+        #            clip_on=False)
     if prac_i == 0:
         ax_kde.plot(x_ax_lims, [-0.8]*2, color='black', linewidth=0.75,
                     clip_on=False)
@@ -499,30 +513,41 @@ for prac_i, prac in enumerate(sorted_pracs):
                 '%i' % soc_ct_neg, fontdict={'fontsize':9, 'color':'red'})
 
     # get rid of ticks and spines
-    ax_kde.set_xticks(())
-    ax_kde.set_yticks(())
-    ax_kde.set_xlabel('')
-    ax_kde.set_ylabel('')
-    ax_kde.spines['top'].set_visible(False)
-    ax_kde.spines['right'].set_visible(False)
-    ax_kde.spines['bottom'].set_visible(False)
-    ax_kde.spines['left'].set_visible(False)
+    if prac_i != len(sorted_pracs) - 1:
+        ax_kde.set_xticks(())
+        ax_kde.set_yticks(())
+        ax_kde.set_xlabel('')
+        ax_kde.set_ylabel('')
+        #ax_kde.spines['right'].set_visible(False)
+        ax_kde.spines['bottom'].set_visible(False)
+        #ax_kde.spines['left'].set_visible(False)
+
+    else:
+        ax_kde.set_xlabel('field-measured AGC density\n($log_{10}\ Mg\ C\ ha^{-1}$)',
+                   fontdict={'fontsize':14})
+        ax_kde.set_ylabel('')
+        ax_kde.set_yticks(())
+        ax_kde.set_xticks(x_tick_locs, x_tick_labs)
+        ax_kde.set_xlim(x_ax_lims)
+    if prac_i != 0:
+        ax_kde.spines['top'].set_visible(False)
+
+    # make axis box transparent (so that plots can overlap one another)
+    ax_kde.set(facecolor='none')
     # add horiz lines for each plot
     ax_kde.axhline(y=0, lw=3, xmin=x_ax_lims[0], xmax=x_ax_lims[1],
                color=prac_colors[prac], clip_on=True, alpha=0.4)
     # add black horizontal line dividing AGC and SOC
     ax_kde.plot([1.08*x_ax_lims[0], x_ax_lims[1]], [0,0],
                 color='black', linewidth=1, clip_on=False, alpha=1)
-    # make axis box transparent (so that plots can overlap one another)
-    ax_kde.set(facecolor='none')
-    # add label for figure part 'A' (if this is the top KDE axis)
-    if prac_i == 0:
-        ax_kde.text(1.6*ax_kde.get_xlim()[0], -0.25, 'A.',
-                    size=24, weight='bold', color='black', clip_on=False)
-fig.subplots_adjust(left=0.18, right=0.97, bottom=0.09, top=0.99,
-                    wspace=0, hspace=-0.35)
-fig.savefig('FIG2_C_density_pub_rs_comp_plot.png', dpi=dpi)
-fig.show()
+
+# save both figs
+fig_ridge.subplots_adjust(left=0.05, right=0.97, bottom=0.16, top=0.99,
+                          wspace=0, hspace=-0.35)
+fig_scat.subplots_adjust(left=0.18, right=0.97, bottom=0.16, top=0.99,
+                         wspace=0, hspace=-0.35)
+fig_ridge.savefig('FIG2_C_density_practice_comp_plot.png', dpi=dpi)
+fig_scat.savefig('FIGS3_C_density_pub_rs_comp_plot.png', dpi=dpi)
 
 
 
@@ -561,7 +586,6 @@ for var in var_dict.keys():
                       fontdict={'fontsize': 16})
         ax.tick_params(labelsize=12)
     fig.subplots_adjust(top=0.96, bottom=0.06, left=0.13, right=0.96, hspace=0.6)
-    fig.show()
     if save_it:
         fig.savefig('FIGS2_C_vs_%s_scatters.png' % var, dpi=700)
 
@@ -621,9 +645,8 @@ print('\n\tslope: %0.4f $Mg\ C\ ha^{-1} yr^{-1} (p=%0.2e)' % (mod.params['x1'],
 print('\n\tR-squared: %0.4f' % mod.rsquared)
 fig_yr_diff.subplots_adjust(left=0.2, right=0.97, bottom=0.15, top=0.93,
                             wspace=0, hspace=0)
-fig_yr_diff.savefig('FIGS3_regression_WHRC_Cardinael_stock_diff_vs_meas_yr_diff.png',
+fig_yr_diff.savefig('FIGS4_regression_WHRC_Cardinael_stock_diff_vs_meas_yr_diff.png',
                dpi=dpi)
-fig_yr_diff.show()
 
 # display % of measurements in 0, (0,5], (5,10], and (10, inf) year-diff bins
 pct_0 = len(agb_comp[(agb_comp['meas_yr_diff']==0)])/len(agb_comp)
@@ -730,9 +753,8 @@ print('\n\tslope: %0.4f $Mg\ C\ ha^{-1} yr^{-1} (p=%0.2e)' % (mod.params['x1'],
 print('\n\tR-squared: %0.4f' % mod.rsquared)
 fig_prec.subplots_adjust(left=0.2, right=0.97, bottom=0.15, top=0.93,
                             wspace=0, hspace=0)
-fig_prec.savefig(('FIGS4_regression_WHRC_Cardinael_stock_diff_vs_'
+fig_prec.savefig(('FIGS5_regression_WHRC_Cardinael_stock_diff_vs_'
                   'coord_precision.png'), dpi=dpi)
-fig_prec.show()
 
 
 
