@@ -456,13 +456,10 @@ if make_map:
             #bcax.set_title(cbar_title_lookup[0], loc='left',
                 #               fontdict={'fontsize':14, 'fontweight': 'bold'})
             # fix ticklabels on colorbars
-            ticklocs = bcax.xaxis.get_ticklocs()
-            curr_ticklabs = bcax.xaxis.get_ticklabels()
+            ticklocs = np.linspace(0, 40, 9)
             new_ticklabs = []
             for n, loc in enumerate(ticklocs):
-                if n%2 == 0:
-                    new_ticklabs.append('%i' % loc)
-            ticklocs = [tl for n, tl in enumerate(ticklocs) if n%2 == 0]
+                new_ticklabs.append('%i' % loc)
             bcax.set_xticks(ticklocs, new_ticklabs)
 
         return
@@ -604,8 +601,8 @@ if make_map:
                  linewidth=1, alpha=1, linestyle='-')
         rax.set_xlim([0, 1])
         rax.set_ylim(ax.get_ylim())
-        rax.set_xlabel('coverage', fontdict={'fontsize':13})
-        rax.set_xticks([0,0.5,1])
+        rax.set_xlabel('percent\noverlap', fontdict={'fontsize':13})
+        rax.set_xticks([0,1], ['0%', '100%'])
         rax.tick_params(labelsize=12)
         rax.set_ylabel('')
         rax.set_yticks(())
@@ -614,16 +611,16 @@ if make_map:
 
 
         fig_map.subplots_adjust(left=0.02,
-                              bottom=0 + (0.05*(map_dataset == 'Chapman')),
+                              bottom=0 + (0.1*(map_dataset == 'Chapman')),
                               right=0.98,
-                              top=1,
+                              top=1 - (0.08*(map_dataset == 'Chapman')),
                               hspace=0,
                              )
         fig_map.show()
 
         if save_it:
             fignum_dict = {'Chapman': '3',
-                            'Lesiv': 'S6',
+                            'Lesiv': 'NULL',
                           }
             fig_map.savefig('FIG%s_%s_AF_map_and_known_AF_locs.png' %
                             (fignum_dict[map_dataset], map_dataset),
