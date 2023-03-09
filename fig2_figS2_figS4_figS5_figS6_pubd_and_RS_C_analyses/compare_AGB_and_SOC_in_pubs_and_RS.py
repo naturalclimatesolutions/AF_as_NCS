@@ -193,7 +193,7 @@ soc['var'] = 'soc'
 all = pd.concat((agb, bgb, soc))
 
 # remap practice names
-practice_key = {'Parkland': 'silvoarable',
+practice_key = {'Parkland': 'intercropping',
                 'Silvoarable': 'silvoarable',
                 'Intercropping': 'intercropping',
                 'Fallow': 'fallow',
@@ -275,11 +275,11 @@ agb_comp['in_chap'] = ((pd.notnull(agb_comp['whrc_stock'])) &
 pracs = agb_comp.practice.unique()
 # dict of practice colors; Bright 6 color palette from http://tsitsul.in/blog/coloropt/
 palette = [
-           '#e935a1', # pink -> silvoarable and parkland
-           '#537eff', # neon blue -> intercropping
+           '#537eff', # neon blue -> intercropping and parkland
            '#00e3ff', # light blue -> fallow
            '#efe645', # yellow -> silvopasture
            '#00cb85', # green -> multistrata
+           '#e935a1', # pink -> silvoarable
            '#e15623', # carrot -> hedgerow
           ]
 prac_colors = dict(zip(pracs, palette))
@@ -439,6 +439,13 @@ agb_meds = np.log10(agb_comp.groupby('practice').median().loc[:,['card_stock_cha
 soc_meds = np.log10(soc_comp[soc_comp['stock_change']>0].groupby('practice').median().loc[:,['stock_change']])
 sorted_pracs = agb_meds.sort_values('card_stock_change').index.values
 
+# create real-valued tick labels for ridgeline plots
+kde_x_tick_real_vals = [v for i in [-2, -1, 0, 1, 2] for v in np.arange(10**i,
+                                                                    10*10**i+10**i,
+                                                                    10**i)]
+kde_x_tick_locs = np.log10(kde_x_tick_real_vals)
+kde_x_tick_labs = [str(v) if v in [0.1, 1, 10, 100, 100] else '' for v in kde_x_tick_real_vals]
+
 # plot each of the AGB and SOC KDEs
 for prac_i, prac in enumerate(sorted_pracs):
     ax_kde = fig_ridge.add_subplot(gs[prac_i, :])
@@ -523,11 +530,12 @@ for prac_i, prac in enumerate(sorted_pracs):
         #ax_kde.spines['left'].set_visible(False)
 
     else:
-        ax_kde.set_xlabel('field-measured AGC density\n($log_{10}\ Mg\ C\ ha^{-1}$)',
+        ax_kde.set_xlabel('$\Delta$ AGC density\n($Mg\ C\ ha^{-1}$)',
                    fontdict={'fontsize':14})
         ax_kde.set_ylabel('')
         ax_kde.set_yticks(())
-        ax_kde.set_xticks(x_tick_locs, x_tick_labs)
+        #ax_kde.set_xticks(x_tick_locs, ['0.1', '1', '10', '100', '1000'])
+        ax_kde.set_xticks(kde_x_tick_locs, kde_x_tick_labs)
         ax_kde.set_xlim(x_ax_lims)
     if prac_i != 0:
         ax_kde.spines['top'].set_visible(False)
