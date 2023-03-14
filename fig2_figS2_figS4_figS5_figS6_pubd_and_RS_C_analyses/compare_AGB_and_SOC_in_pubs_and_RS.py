@@ -86,23 +86,30 @@ agb.columns = ['meas_type',
                'bgb_rate',
                'meas_yr',
               ]
-# handle fact that stock measurements straddle stock and comm-unit stock cols
+
+# NOTE: drop Parklands
+agb = agb[agb['practice'] != 'Parkland']
+
+# conversion
+
+# handle the fact that stock measurements straddle stock and comm-unit stock cols
 corrected_stock = []
+corrected_unit = []
 for i, row in agb.iterrows():
-    if (pd.isnull(row['stock_comm']) and pd.isnull(row['unit_comm'])):
-        try:
-            assert row['unit'] == 'tonnes C/ha (274)' and pd.notnull(row['stock'])
-            corrected_stock.append(row['stock'])
-        except Exception as e:
-            print('STOCK DATA NOT AVAILABLE FOR THIS ROW (unit: %s)' % row['unit'])
-            corrected_stock.append(np.nan)
-    else:
-        assert row['unit'] != 'tonnes C/ha (274)'
+    if pd.notnull(row['stock_comm']):
         corrected_stock.append(row['stock_comm'])
-agb['stock'] = pd.Series(corrected_stock).astype('float')
-agb = agb.loc[:, ((agb.columns != 'stock_comm') &
-                  (agb.columns != 'unit') &
-                  (agb.columns != 'unit_comm'))]
+        corrected_unit.append(row['unit_comm'])
+    elif (pd.notnull(row['unit']) and pd.notnull(row['stock']) and
+          row['unit'] == 'tonnes C/ha (274)'):
+        corrected_stock.append(row['stock'])
+        corrected_unit.append(row['unit'])
+    else:
+        corrected_stock.append(np.nan)
+        corrected_unit.append(np.nan)
+assert np.all([pd.isnull(u) or u=='tonnes C/ha (274)' for u in corrected_unit])
+agb['stock'] = corrected_stock
+agb = agb.drop(labels=['stock_comm', 'unit', 'unit_comm'], axis=1)
+
 # duplicate as a 'stock_change' column (since they're effectively the same
 # idea for AGB and BGB in AF being established on untreed lands)
 agb['stock_change'] = agb['stock']
@@ -176,6 +183,10 @@ soc.columns = ['pub',
                'rate',
               ]
 
+# NOTE: drop Parklands
+soc = soc[soc['practice'] != 'Parkland']
+
+
 # add cols that are in agb and bgb data missing from here
 soc['age_bm'] = np.nan
 soc['meas_yr'] = np.nan
@@ -193,7 +204,7 @@ soc['var'] = 'soc'
 all = pd.concat((agb, bgb, soc))
 
 # remap practice names
-practice_key = {'Parkland': 'intercropping',
+practice_key = {
                 'Silvoarable': 'silvoarable',
                 'Intercropping': 'intercropping',
                 'Fallow': 'fallow',
@@ -227,12 +238,14 @@ agb_pts = gpd.GeoDataFrame(agb_pts, geometry=gpd.points_from_xy(agb_pts.lon,
 # read in the points after Chapman data has been merged onto them,
 # for AGB estimate comparison
 agb_comp_chap = gpd.read_file('../GEE_shp_output/agb_pts_from_cardinael_2018_chapman_extract.shp')
+assert np.all(np.sort(agb_pts['ID']) == np.sort(agb_comp_chap['ID']))
 agb_comp_chap = agb_comp_chap.rename({'mean': 'chap_stock'}, axis=1)
 # NOTE: CORRECT FOR FACT THAT I ESTIMATED AGC FROM AGB USING 0.5 C/BIOMASS
 # RATIO (BEFORE EXPORTING FROM GEE), BUT CARDINAEL ET AL. 2018 USED 0.47
 agb_comp_chap['chap_stock'] = agb_comp_chap['chap_stock']*2*0.47
 
 agb_comp_whrc = gpd.read_file('../GEE_shp_output/agb_pts_from_cardinael_2018_whrc_extract.shp')
+assert np.all(np.sort(agb_pts['ID']) == np.sort(agb_comp_whrc['ID']))
 agb_comp_whrc = agb_comp_whrc.rename({'mean': 'whrc_stock'}, axis=1)
 # NOTE: CORRECT FOR FACT THAT I ESTIMATED AGC FROM AGB USING 0.5 C/BIOMASS
 # RATIO (BEFORE EXPORTING FROM GEE), BUT CARDINAEL ET AL. 2018 USED 0.47
@@ -284,7 +297,7 @@ palette = [
           ]
 prac_colors = dict(zip(pracs, palette))
 
-# get the SOC carbon to create comparison ridgeline plot from
+# get the SOC to create comparison ridgeline plot from
 soc_comp = all[all['var'] == 'soc']
 soc_comp['card_stock_change_log'] = np.log10(soc_comp['stock_change'])
 
@@ -348,6 +361,7 @@ ax_scat.set_ylabel('remotely sensed AGC density\n($log_{10}\ Mg\ C\ ha^{-1}$)',
 #ax_scat.xaxis.set_label_position('top')
 ax_scat.tick_params(labelsize=10)
 total_n_pts = 0
+legend_elements = []
 for prac in pracs:
     sub_agb_comp = agb_comp[agb_comp['practice'] == prac]
     sns.scatterplot(x='card_stock_change_log',
@@ -364,13 +378,11 @@ for prac in pracs:
                     ax=ax_scat)
     total_n_pts += len(sub_agb_comp)
 # add manual legend
-legend_elements = []
-for prac, color in prac_colors.items():
     label = prac
     element = Line2D([0], [0],
                      marker='o',
                      color='none',
-                     markerfacecolor=color,
+                     markerfacecolor=prac_colors[prac],
                      markeredgecolor='none',
                      label=prac,
                      markersize=6,
@@ -444,7 +456,7 @@ kde_x_tick_real_vals = [v for i in [-2, -1, 0, 1, 2] for v in np.arange(10**i,
                                                                     10*10**i+10**i,
                                                                     10**i)]
 kde_x_tick_locs = np.log10(kde_x_tick_real_vals)
-kde_x_tick_labs = [str(v) if v in [0.1, 1, 10, 100, 100] else '' for v in kde_x_tick_real_vals]
+kde_x_tick_labs = [str(v) if v in [0.1, 1, 10, 100, 1000] else '' for v in kde_x_tick_real_vals]
 
 # plot each of the AGB and SOC KDEs
 for prac_i, prac in enumerate(sorted_pracs):
@@ -512,11 +524,11 @@ for prac_i, prac in enumerate(sorted_pracs):
     agb_ct = np.sum(agb_comp[agb_comp['practice'] == prac]['card_stock_change']>0)
     soc_ct = np.sum(soc_comp[soc_comp['practice'] == prac]['stock_change']>0)
     soc_ct_neg = np.sum(soc_comp[soc_comp['practice'] == prac]['stock_change']<0)
-    ax_kde.text(0.985*ax_kde.get_xlim()[0], -0.09, '%i' % agb_ct,
+    ax_kde.text(0.985*ax_kde.get_xlim()[0], -0.06, '%i' % agb_ct,
                 fontdict={'fontsize':9,})
-    ax_kde.text(0.985*ax_kde.get_xlim()[0], 0.2, '%i' % soc_ct,
+    ax_kde.text(0.985*ax_kde.get_xlim()[0], 0.22, '%i' % soc_ct,
                 fontdict={'fontsize':9,})
-    ax_kde.text((1.06 + (0.04*(soc_ct_neg>10)))*ax_kde.get_xlim()[0], 0.2,
+    ax_kde.text((1.05 + (0.035*(soc_ct_neg>=10)))*ax_kde.get_xlim()[0], 0.22,
                 '%i' % soc_ct_neg, fontdict={'fontsize':9, 'color':'red'})
 
     # get rid of ticks and spines
@@ -632,7 +644,7 @@ sns.regplot(x='meas_yr_diff', y='stock_diff_whrc', data=agb_comp, scatter=False)
 ax_yr_diff.set_xlabel(('measurement year discrepancy\n(Cardinael data '
                        'year - WHRC data year (2000))'),
                        fontdict={'fontsize':12})
-ax_yr_diff.set_ylabel(('stock estimate difference ($Mg\ C\ ha^{-1}$)\n'
+ax_yr_diff.set_ylabel(('stock estimate discrepancy ($Mg\ C\ ha^{-1}$)\n'
                        '(Cardinael data stock estmate - '
                        'WHRC stock estimate'),
                        fontdict={'fontsize':12})
@@ -744,7 +756,7 @@ for prac in pracs:
 sns.regplot(x='coord_prec', y='stock_diff_whrc_abs', data=agb_comp, scatter=False)
 ax_prec.set_xlabel(('approximate precision of published geographic '
                        '\ncoordinates (decimal degrees)'), fontdict={'fontsize': 12})
-ax_prec.set_ylabel(('absolute stock estimate difference ($Mg\ C\ ha^{-1}$)\n'
+ax_prec.set_ylabel(('absolute stock estimate discrepancy ($Mg\ C\ ha^{-1}$)\n'
                        '|Cardinael data stock estmate - '
                        'WHRC stock estimate|'), fontdict={'fontsize':12})
 ax_prec.tick_params(labelsize=8)
@@ -754,9 +766,9 @@ print(('\n\nResults of regression of stock-estimate difference on coordinate-'
 mod = OLS(agb_comp_reg['stock_diff_whrc_abs'],
           np.vstack((np.ones(len(agb_comp_reg)),
                      agb_comp_reg['coord_prec'])).T).fit()
-print('\n\tintercept: %0.4f $Mg\ C\ ha^{-1} (p=%0.2e)' % (mod.params['const'],
+print('\n\tintercept: %0.4f $Mg\ C\ ha^{-1} (p=%0.2e)$' % (mod.params['const'],
                                           mod.pvalues['const']))
-print('\n\tslope: %0.4f $Mg\ C\ ha^{-1} yr^{-1} (p=%0.2e)' % (mod.params['x1'],
+print('\n\tslope: %0.4f $Mg\ C\ ha^{-1} \circ^{-1} (p=%0.2e)$' % (mod.params['x1'],
                                       mod.pvalues['x1']))
 print('\n\tR-squared: %0.4f' % mod.rsquared)
 fig_prec.subplots_adjust(left=0.2, right=0.97, bottom=0.15, top=0.93,

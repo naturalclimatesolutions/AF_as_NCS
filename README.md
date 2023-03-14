@@ -32,7 +32,7 @@ Analyses were run in two major stages, so directories of content are organized t
 3. Download into `./fig3_maps_fig5_curr_vs_poten/AF_locations_from_papers` the latest verison of the draft GROA-AF carbon database (NOTE: version used for analysis was downloaded on 07/21/22).
 4. Run `./fig3_maps_fig5_curr_vs_poten/AF_locations_from_papers/prep_AF_location_data.py` to process the raw GROA-AF geocoordinates and generate a cleaned-up, formatted shapefile ('AF_locations_from_meta-analyses.shp').
 5. Ingest that shapefile into GEE.
-6. Run `./GEE_code/prep_fig2_fig3_data.js` on GEE, with flags 'export_lesiv', 'export_chapman', and 'extract_agb_at_cardinael' set to true.
+6. Run `./GEE_code/prep_fig2_fig3_data.js` on GEE, with flags 'export_lesiv' and 'export_chapman' set to true and 'extract_agb_at_cardinael' set to false.
 7. Download the resulting GeoTIFFs (to `./GEE_tif_output`) and shapefiles (to `./GEE_shp_output`), from Google Cloud storage and Google Drive, respectively.
 8. Run `./GEE_tif_output/reproject_chapman_lesiv.sh1` to warp rasters from GEE's output EPSG:4326 to target global equal-area projection (ESRI:54012; world Eckert IV).
 9. Manually choose from the current draft GROA-AF database an AF site with high-enough coordinate precision to be visually identified in Google Earth aerial imagery, and with decent-enough temporal coverage in the Google Earth aerial imagery archive to show temporal dynamics
@@ -47,8 +47,11 @@ Analyses were run in two major stages, so directories of content are organized t
 
 ## analysis component B:
 
-1. Run `./fig2_figS2_figS3_figS4_pubd_and_RS_C_analyses/compare_AGB_and_SOC_in_pubs_and_RS.py` to produce comparison between SOC and AGB and between in situ and remotely sensed AGB values ('FIG2_C_density_pub_rs_comp_plot.png'), to analyze divergence between in situ and RS estimates as a function of temporal divergence ('FIGS3_regression_WHRC_Cardinael_stock_diff_vs_meas_yr_diff.png'), and to plot AGC, BGC, and SOC as a function of stem density ('FIGS2_C_vs_stem_density_scatters.png').
-
+1. Run `./fig2_figS2_figS3_figS4_pubd_and_RS_C_analyses/compare_AGB_and_SOC_in_pubs_and_RS.py` manually, up to line 230, then manually run line 231 to export the prepped data to shapefile (to be imported into GEE).
+2. Import the resulting file ('agb_pts_from_cardinael_2018.shp') import GEE.
+3. Run `./GEE_code/prep_fig2_fig3_data.js` on GEE, with flags 'export_lesiv' and 'export_chapman' set to false and 'extract_agb_at_cardinael' set to true.
+4. Download the resulting GEE output files from Google Drive ('agb_pts_from_cardinael_2018_\*').
+5. Run `./fig2_figS2_figS3_figS4_pubd_and_RS_C_analyses/compare_AGB_and_SOC_in_pubs_and_RS.py` in full, to produce carbon density ridgline plots ('FIG2_C_density_practice_comp_plot.png'), comparison between SOC and AGB and between in situ and remotely sensed AGB values ('FIGS4_C_density_pub_rs_comp_plot.png'), to analyze divergence between in situ and RS estimates as a function of temporal divergence ('FIGS5_regression_WHRC_Cardinael_stock_diff_vs_meas_yr_diff.png') and spatial precision ('FIGS6_regression_WHRC_Cardinael_stock_diff_vs_coord_precision.png'), and to plot AGC, BGC, and SOC as a function of stem density ('FIGS2_C_vs_stem_density_scatters.png').
 
 ## analysis component C:
 
