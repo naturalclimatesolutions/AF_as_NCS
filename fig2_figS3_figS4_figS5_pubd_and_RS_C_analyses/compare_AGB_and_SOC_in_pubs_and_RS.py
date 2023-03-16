@@ -218,6 +218,14 @@ practice_key = {
 practice = [practice_key[p] for p in all['practice']]
 all['practice'] = practice
 
+# NOTE: dropping hedgerow because we realized that the Cardinael et al. 2018
+#       dataset erroneously reports common units there as Mg C/ha, but the
+#       values are actually in Mg C/kg hedgerow length (for the understandable 
+#       reason that there is no valid assumption to be made about the size of a
+#       field surrounded by hedgerows!)
+
+all = all[all['practice'] != 'hedgerow']
+
 
 # get lat,lon for all measurements from meta-analyses
 # (these will be used to extract woodyC stock estimates from Chapman
@@ -293,7 +301,7 @@ palette = [
            '#efe645', # yellow -> silvopasture
            '#00cb85', # green -> multistrata
            '#e935a1', # pink -> silvoarable
-           '#e15623', # carrot -> hedgerow
+           #'#e15623', # carrot -> hedgerow
           ]
 prac_colors = dict(zip(pracs, palette))
 
@@ -472,6 +480,7 @@ for prac_i, prac in enumerate(sorted_pracs):
                    x="card_stock_change_log",
                    hue="pool",
                    data=sub_comp,
+                   scale='width',
                    palette=[prac_colors[prac]]*2,
                    split=True,
                    inner=None,
@@ -567,47 +576,7 @@ fig_ridge.subplots_adjust(left=0.05, right=0.97, bottom=0.16, top=0.99,
 fig_scat.subplots_adjust(left=0.18, right=0.97, bottom=0.16, top=0.99,
                          wspace=0, hspace=-0.35)
 fig_ridge.savefig('FIG2_C_density_practice_comp_plot.png', dpi=dpi)
-fig_scat.savefig('FIGS4_C_density_pub_rs_comp_plot.png', dpi=dpi)
-
-
-
-
-################
-# make figure s2
-################
-
-#stock_var = 'stock_change'
-stock_var = 'stock'
-save_it = True
-var_dict = {
-            'dens': 'stem density',
-           }
-var_axlabel_dict = {'dens': 'density ($stems\  ha^{-1}$)'}
-for var in var_dict.keys():
-    fig, axs = plt.subplots(3,1, figsize=(6.5,9.75))
-    for i, pool in enumerate(['agb', 'bgb', 'soc']):
-        ax = axs[i]
-        sns.scatterplot(var,
-                        stock_var,
-                        hue='practice',
-                        hue_order=pracs,
-                        s=30,
-                        alpha=0.8,
-                        data=all[all['var'] == pool],
-                        ax=ax,
-                        legend=i==2,
-                        palette=prac_colors,
-                        edgecolor='black',
-                       )
-        ax.set_title(pool.upper(), fontdict={'fontsize': 20})
-        ax.set_xlabel(var_axlabel_dict[var], fontdict={'fontsize': 16})
-        ax.set_ylabel('stock %s($Mg\ C\ ha^{-1}$)' % ('change ' * (stock_var ==
-                                                                  'stock_change')),
-                      fontdict={'fontsize': 16})
-        ax.tick_params(labelsize=12)
-    fig.subplots_adjust(top=0.96, bottom=0.06, left=0.13, right=0.96, hspace=0.6)
-    if save_it:
-        fig.savefig('FIGS2_C_vs_%s_scatters.png' % var, dpi=700)
+fig_scat.savefig('FIGS3_C_density_pub_rs_comp_plot.png', dpi=dpi)
 
 
 
@@ -646,7 +615,7 @@ ax_yr_diff.set_xlabel(('measurement year discrepancy\n(Cardinael data '
                        fontdict={'fontsize':12})
 ax_yr_diff.set_ylabel(('stock estimate discrepancy ($Mg\ C\ ha^{-1}$)\n'
                        '(Cardinael data stock estmate - '
-                       'WHRC stock estimate'),
+                       'WHRC stock estimate)'),
                        fontdict={'fontsize':12})
 ax_yr_diff.set_xlim(-10, 15)
 ax_yr_diff.set_ylim(-225, 165)
@@ -665,7 +634,7 @@ print('\n\tslope: %0.4f $Mg\ C\ ha^{-1} yr^{-1} (p=%0.2e)' % (mod.params['x1'],
 print('\n\tR-squared: %0.4f' % mod.rsquared)
 fig_yr_diff.subplots_adjust(left=0.2, right=0.97, bottom=0.15, top=0.93,
                             wspace=0, hspace=0)
-fig_yr_diff.savefig('FIGS5_regression_WHRC_Cardinael_stock_diff_vs_meas_yr_diff.png',
+fig_yr_diff.savefig('FIGS4_regression_WHRC_Cardinael_stock_diff_vs_meas_yr_diff.png',
                dpi=dpi)
 
 # display % of measurements in 0, (0,5], (5,10], and (10, inf) year-diff bins
@@ -773,7 +742,7 @@ print('\n\tslope: %0.4f $Mg\ C\ ha^{-1} \circ^{-1} (p=%0.2e)$' % (mod.params['x1
 print('\n\tR-squared: %0.4f' % mod.rsquared)
 fig_prec.subplots_adjust(left=0.2, right=0.97, bottom=0.15, top=0.93,
                             wspace=0, hspace=0)
-fig_prec.savefig(('FIGS6_regression_WHRC_Cardinael_stock_diff_vs_'
+fig_prec.savefig(('FIGS5_regression_WHRC_Cardinael_stock_diff_vs_'
                   'coord_precision.png'), dpi=dpi)
 
 

@@ -18,7 +18,7 @@ Analyses were run in two major stages, so directories of content are organized t
 ### analysis includes various components:
 
 **A.** analysis of overlap in original studies analyzed in 9 meta-analyses (produces Fig. S1)
-**B.** analysis of uncertainty in C estimates (from Cardinael et al. 2018 data) and comparison to remotely sensed estimates (produces Figs. 2, S2, S3)
+**B.** analysis of uncertainty in C estimates (from Cardinael et al. 2018 data) and comparison to remotely sensed estimates (produces Figs. 2, S3, S4, S5)
 **C.** maps comparing global AF rasters to known AF point localities (produces Fig. 3), and comparison between current and potential AF use (produces Fig. 5), and estimate of global AF aboveground C based on Lesiv et al. 2022 global AF map
 **D.** demonstration of spatial and temporal resolution and precision issues for AF MRV methodologies (produces Fig. 4)
 
@@ -47,11 +47,11 @@ Analyses were run in two major stages, so directories of content are organized t
 
 ## analysis component B:
 
-1. Run `./fig2_figS2_figS3_figS4_pubd_and_RS_C_analyses/compare_AGB_and_SOC_in_pubs_and_RS.py` manually, up to line 230, then manually run line 231 to export the prepped data to shapefile (to be imported into GEE).
+1. Run `./fig2_figS3_figS4_figS5_pubd_and_RS_C_analyses/compare_AGB_and_SOC_in_pubs_and_RS.py` manually, up to line 230, then manually run line 231 to export the prepped data to shapefile (to be imported into GEE).
 2. Import the resulting file ('agb_pts_from_cardinael_2018.shp') import GEE.
 3. Run `./GEE_code/prep_fig2_fig3_data.js` on GEE, with flags 'export_lesiv' and 'export_chapman' set to false and 'extract_agb_at_cardinael' set to true.
 4. Download the resulting GEE output files from Google Drive ('agb_pts_from_cardinael_2018_\*').
-5. Run `./fig2_figS2_figS3_figS4_pubd_and_RS_C_analyses/compare_AGB_and_SOC_in_pubs_and_RS.py` in full, to produce carbon density ridgline plots ('FIG2_C_density_practice_comp_plot.png'), comparison between SOC and AGB and between in situ and remotely sensed AGB values ('FIGS4_C_density_pub_rs_comp_plot.png'), to analyze divergence between in situ and RS estimates as a function of temporal divergence ('FIGS5_regression_WHRC_Cardinael_stock_diff_vs_meas_yr_diff.png') and spatial precision ('FIGS6_regression_WHRC_Cardinael_stock_diff_vs_coord_precision.png'), and to plot AGC, BGC, and SOC as a function of stem density ('FIGS2_C_vs_stem_density_scatters.png').
+5. Run `./fig2_figS3_figS4_figS5_pubd_and_RS_C_analyses/compare_AGB_and_SOC_in_pubs_and_RS.py` in full, to produce carbon density ridgline plots ('FIG2_C_density_practice_comp_plot.png'), comparison between SOC and AGB and between in situ and remotely sensed AGB values ('FIGS4_C_density_pub_rs_comp_plot.png'), and to analyze divergence between in situ and RS estimates as a function of temporal divergence ('FIGS5_regression_WHRC_Cardinael_stock_diff_vs_meas_yr_diff.png') and spatial precision ('FIGS6_regression_WHRC_Cardinael_stock_diff_vs_coord_precision.png').
 
 ## analysis component C:
 
