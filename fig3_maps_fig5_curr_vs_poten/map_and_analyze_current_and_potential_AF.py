@@ -56,8 +56,6 @@ min_x=0
 max_x=1
 min_y=0
 max_y=1
-savefig=True
-savefig=True
 x_buff=max_x/20
 savefig=True
 
@@ -622,9 +620,9 @@ if make_map:
             fignum_dict = {'Chapman': '3',
                             'Lesiv': 'NULL',
                           }
-            fig_map.savefig('FIG%s_%s_AF_map_and_known_AF_locs.png' %
+            fig_map.savefig('FIG%s_%s_AF_map_and_known_AF_locs.pdf' %
                             (fignum_dict[map_dataset], map_dataset),
-                            dpi=dpi, orientation='landscape')
+                            orientation='landscape')
 
 
 
@@ -911,7 +909,7 @@ if make_plots:
     fig_1.show()
 
     if save_it:
-        fig_1.savefig('FIG5_curr_and_potent_boxplots_and_curr_scat.png', dpi=dpi)
+        fig_1.savefig('FIG5_curr_and_potent_boxplots_and_curr_scat.pdf')
 
     # STATISTICAL TESTS:
         # t-tests of difference in ag-area-weighted average woody C density

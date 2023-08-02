@@ -575,8 +575,8 @@ fig_ridge.subplots_adjust(left=0.05, right=0.97, bottom=0.16, top=0.99,
                           wspace=0, hspace=-0.35)
 fig_scat.subplots_adjust(left=0.18, right=0.97, bottom=0.16, top=0.99,
                          wspace=0, hspace=-0.35)
-fig_ridge.savefig('FIG2_C_density_practice_comp_plot.png', dpi=dpi)
-fig_scat.savefig('FIGS3_C_density_pub_rs_comp_plot.png', dpi=dpi)
+fig_ridge.savefig('FIG2_C_density_practice_comp_plot.pdf')
+fig_scat.savefig('FIGS3_C_density_pub_rs_comp_plot.pdf')
 
 
 
@@ -634,8 +634,7 @@ print('\n\tslope: %0.4f $Mg\ C\ ha^{-1} yr^{-1} (p=%0.2e)' % (mod.params['x1'],
 print('\n\tR-squared: %0.4f' % mod.rsquared)
 fig_yr_diff.subplots_adjust(left=0.2, right=0.97, bottom=0.15, top=0.93,
                             wspace=0, hspace=0)
-fig_yr_diff.savefig('FIGS4_regression_WHRC_Cardinael_stock_diff_vs_meas_yr_diff.png',
-               dpi=dpi)
+fig_yr_diff.savefig('FIGS4_regression_WHRC_Cardinael_stock_diff_vs_meas_yr_diff.pdf')
 
 # display % of measurements in 0, (0,5], (5,10], and (10, inf) year-diff bins
 pct_0 = len(agb_comp[(agb_comp['meas_yr_diff']==0)])/len(agb_comp)
@@ -743,7 +742,7 @@ print('\n\tR-squared: %0.4f' % mod.rsquared)
 fig_prec.subplots_adjust(left=0.2, right=0.97, bottom=0.15, top=0.93,
                             wspace=0, hspace=0)
 fig_prec.savefig(('FIGS5_regression_WHRC_Cardinael_stock_diff_vs_'
-                  'coord_precision.png'), dpi=dpi)
+                  'coord_precision.pdf'))
 
 
 

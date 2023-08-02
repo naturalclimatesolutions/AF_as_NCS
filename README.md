@@ -43,7 +43,7 @@ Analyses were run in two major stages, so directories of content are organized t
 
 ## analysis component A:
 
-1. Run `./figS1_paper_coverage_in_metaanalyses/make_paper_coverage_bar_chart.py` to calculate from the GROA-AF draft database summary statistics of coverage of primary literature in our 21 identified AF meta-analyses and to produce Fig. S1 ('FIGS1_primary_study_coverage_across_meta-analyses.png').
+1. Run `./figS1_paper_coverage_in_metaanalyses/make_paper_coverage_bar_chart.py` to calculate from the GROA-AF draft database summary statistics of coverage of primary literature in our 21 identified AF meta-analyses and to produce Fig. S1 ('FIGS1_primary_study_coverage_across_meta-analyses.pdf').
 
 ## analysis component B:
 
@@ -51,15 +51,14 @@ Analyses were run in two major stages, so directories of content are organized t
 2. Import the resulting file ('agb_pts_from_cardinael_2018.shp') import GEE.
 3. Run `./GEE_code/prep_fig2_fig3_data.js` on GEE, with flags 'export_lesiv' and 'export_chapman' set to false and 'extract_agb_at_cardinael' set to true.
 4. Download the resulting GEE output files from Google Drive ('agb_pts_from_cardinael_2018_\*').
-5. Run `./fig2_figS3_figS4_figS5_pubd_and_RS_C_analyses/compare_AGB_and_SOC_in_pubs_and_RS.py` in full, to produce carbon density ridgline plots ('FIG2_C_density_practice_comp_plot.png'), comparison between SOC and AGB and between in situ and remotely sensed AGB values ('FIGS4_C_density_pub_rs_comp_plot.png'), and to analyze divergence between in situ and RS estimates as a function of temporal divergence ('FIGS5_regression_WHRC_Cardinael_stock_diff_vs_meas_yr_diff.png') and spatial precision ('FIGS6_regression_WHRC_Cardinael_stock_diff_vs_coord_precision.png').
+5. Run `./fig2_figS3_figS4_figS5_pubd_and_RS_C_analyses/compare_AGB_and_SOC_in_pubs_and_RS.py` in full, to produce carbon density ridgline plots ('FIG2_C_density_practice_comp_plot.pdf'), comparison between SOC and AGB and between in situ and remotely sensed AGB values ('FIGS4_C_density_pub_rs_comp_plot.pdf'), and to analyze divergence between in situ and RS estimates as a function of temporal divergence ('FIGS5_regression_WHRC_Cardinael_stock_diff_vs_meas_yr_diff.pdf') and spatial precision ('FIGS6_regression_WHRC_Cardinael_stock_diff_vs_coord_precision.pdf').
 
 ## analysis component C:
 
-1. Run `./fig3_maps_fig5_curr_vs_poten/map_and_analyze_current_and_potential_AF.py` to produce maps of current AF locations ('FIG3_AF_maps_and_known_AF_locs.png') and analysis of current vs. potential AF mitigation ('FIG5_curr_and_potent_AF_C_boxplots_and_curr_scat.png'). Some statistics for publication are printed to STDOUT.
+1. Run `./fig3_maps_fig5_curr_vs_poten/map_and_analyze_current_and_potential_AF.py` to produce maps of current AF locations ('FIG3_AF_maps_and_known_AF_locs.pdf') and analysis of current vs. potential AF mitigation ('FIG5_curr_and_potent_AF_C_boxplots_and_curr_scat.pdf'). Some statistics for publication are printed to STDOUT.
 2. Run `./fig3_maps_fig5_curr_vs_poten/stimate_global_AF_area_C_from_lesiv.py` to get estimates of global total AF land area and global total AF AGC according to Lesiv et al. 2022 (combined with the year-2000 AGB map from WHRC/GFW, which is a mismatch in year but a better comparator against Chapman's global AF AGC estimates derived from the same map).
 
 ## analysis component D:
 
 1.Run `./fig4_spatial_temporal_chars/make_legend_for_MRV_radii.py` to load Cardinael et al. 2018 data and estimate spatial precision of each coordinate, and produce the legend image for Fig. 4a.
-2. Open LibreOffice Draw, load all saved images, compose Fig. 4, and save as PNG (18.5x23.93", to ensure high resolution).
-3. Run `./fig4_spatial_temporal_chars/adjust_brightness_contrast_fig4.sh` to increase the brightness and contrast of Figure 4 a bit, to make land features and land changes more discernible in publication (because Google Maps defaulty aerial imagery is somewhat dark).
+2. Open LibreOffice Draw, load all saved images, compose Fig. 4, and save as PDF (18.5x23.93", to ensure high resolution).
