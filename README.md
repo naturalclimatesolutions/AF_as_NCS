@@ -1,11 +1,13 @@
 # Terasaki Hart *et al.* 2023 "Priority Science Can Accelerate Agroforestry as a Natural Climate Solution"
+
+[![DOI](https://zenodo.org/badge/362674213.svg)](https://zenodo.org/badge/latestdoi/362674213)
+
 This repo contains code and some data files used for our 'state of the knowledge' perspective piece on agroforestry as a natural climate solution (NCS).
 
 Code was written by Drew Ellison Terasaki Hart,
 and is available to freely distribute and modify, with proper
 attribution, under the MIT License.
 
-[![DOI](https://zenodo.org/badge/362674213.svg)](https://zenodo.org/badge/latestdoi/362674213)
 
 # < PUT CITATION HERE >
 
