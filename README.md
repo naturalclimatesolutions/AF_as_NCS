@@ -9,7 +9,7 @@ and is available to freely distribute and modify, with proper
 attribution, under the MIT License.
 
 
-# Terasaki Hart, D.E., Yeo, S., Almaraz, M. et al. Priority science can accelerate agroforestry as a natural climate solution. Nat. Clim. Chang. 13, 1179–1190 (2023). https://doi.org/10.1038/s41558-023-01810-5
+### Terasaki Hart, D.E., Yeo, S., Almaraz, M. et al. Priority science can accelerate agroforestry as a natural climate solution. Nat. Clim. Chang. 13, 1179–1190 (2023). https://doi.org/10.1038/s41558-023-01810-5
 
 Analyses were run in two major stages, so directories of content are organized to reflect this:
   1. data prep and analysis on Google Earth Engine (*directories containing this material are prepended with 'GEE_'*)
