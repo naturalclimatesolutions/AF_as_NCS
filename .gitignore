@@ -2,7 +2,6 @@
 *.png
 *.pdf
 *.jpg
-*.csv
 *.tif
 *.tif.aux.xml
 *.zip
@@ -11,7 +10,6 @@
 *.fix
 *.docx
 fig3_maps_fig5_curr_vs_poten/rosenstock_data/*.xlsx
-fig3_maps_fig5_curr_vs_poten/rosenstock_data/rosenstock*
 fig3_maps_fig5_curr_vs_poten/AF_locations_from_papers/scratch/
 fig3_maps_fig5_curr_vs_poten/chapman_data_aggregated/*
 fig3_maps_fig5_curr_vs_poten/chapman_potential_data/*
