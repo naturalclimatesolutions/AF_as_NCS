@@ -162,6 +162,7 @@ france_row['iso_a3'] = 'FRA'
 france_row['gdp_md_est'] = np.nan
 france_row['pop_est'] = np.nan
 countries = countries.append(gpd.GeoDataFrame({**france_row}))
+#countries = pd.concat([countries, gpd.GeoDataFrame({**france_row})])
 french_guiana_row = deepcopy(fake_row)
 french_guiana_row['name'] = 'French Guiana'
 french_guiana_row['geometry'] = french_guiana_poly
@@ -170,6 +171,7 @@ french_guiana_row['iso_a3'] = 'GUF'
 french_guiana_row['gdp_md_est'] = np.nan
 french_guiana_row['pop_est'] = np.nan
 countries = countries.append(gpd.GeoDataFrame({**french_guiana_row}))
+#countries = pd.concat([countries, gpd.GeoDataFrame({**french_guiana_row})])
 # create Central America and Caribbean
 for country in ['Haiti', 'Dominican Rep.', 'Bahamas',
                 'Panama', 'Costa Rica', 'Nicaragua',
@@ -222,7 +224,8 @@ subroe = roe.loc[:, ['ISO', 'agrofor_techcum', 'agrofor_techden',
                         'agrofor_feascum', 'agrofor_feasden']]
 for col in subroe.columns[1:]:
     # NOTE: convert t CO2 to t C
-    subroe[col] = subroe[col] * 1e6 * (12.0107/(2 * 15.999))
+    # DETH: 29-04-26: fixed calculation of CO2 molecular weight
+    subroe[col] = subroe[col] * 1e6 * (12.0107/((2 * 15.999)+12.0107))
 potential = pd.merge(chapman_potential, subroe,
                      left_on='iso_a3', right_on='ISO', how='left')
 
@@ -726,7 +729,7 @@ if make_plots:
                        color='black', linewidth=0.5)
         patch = Rectangle(xy=(val, ax0.get_ylim()[0]),
                           width=0.5*cont_tot_width,
-                          height=np.diff(ax0.get_ylim()),
+                          height=np.diff(ax0.get_ylim())#.ravel()[0],
                          )
         patches.append(patch)
     # also add bold black line at far right
@@ -743,8 +746,7 @@ if make_plots:
                    fontdict={'fontsize':16})
 
     # add label for part 'A' of figure
-    ax0.text(-1.5, 44.7, 'A.', size=24, weight='bold', clip_on=False)
-
+    ax0.text(-1.5, 32.5, 'A.', size=24, weight='bold', clip_on=False)
 
     # t-test of significant diff between NDC and non-NDC groups
     res = ttest_ind(data_for_figs[data_for_figs.NDC_num==1]['wt_avg_density'],
@@ -851,7 +853,8 @@ if make_plots:
     for val, size in zip(vals, sizes):
         label = '$%s.%s\ ×\ 10^{%i}$' % (str(val)[0],
                                          str(val)[1],
-                                         len(str(val))-1)
+                                         # DETH: 29-04-26: fixed calculation of order of magnitude
+                                         len(str(int(val)))-1)
         # add circle and X markers
         element_x = Line2D([0], [0],
                          marker='X',
@@ -909,7 +912,7 @@ if make_plots:
     fig_1.show()
 
     if save_it:
-        fig_1.savefig('FIG5_curr_and_potent_boxplots_and_curr_scat.pdf')
+        fig_1.savefig('FIG5_curr_and_potent_boxplots_and_curr_scat_CORRECTED.pdf')
 
     # STATISTICAL TESTS:
         # t-tests of difference in ag-area-weighted average woody C density
